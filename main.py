@@ -11,14 +11,23 @@ MASTER_KEY = "YAGAMIOWNBOT+7914&"
 VALID_KEYS = set([MASTER_KEY])
 ADMIN_IDS = set()
 
-# ITO YUNG 5 FILES MO
-FILES = [
-    "Codm_0725_1909_1.txt",
-    "Codm_0725_1909.txt",
-    "Codm_0725_1908_1.txt",
-    "Mix_Codm_0725_1908.txt",
-    "Mix_Codm_0725_1908_1.txt",
-]
+# AYOS NA MAY PAMAGAT AT HIWALAY NA CATEGORY
+# Format: "Pamagat na lalabas" : "tunay na filename sa GitHub"
+CATEGORIES = {
+    "CODM": [
+        ("CODM 1909 - V1", "Codm_0725_1909_1.txt"),
+        ("CODM 1909 - V2", "Codm_0725_1909.txt"),
+        ("CODM 1908 - V1", "Codm_0725_1908_1.txt"),
+        ("MIX CODM 1908 - V1", "Mix_Codm_0725_1908.txt"),
+        ("MIX CODM 1908 - V2", "Mix_Codm_0725_1908_1.txt"),
+    ],
+    "ML": [
+        ("ML UPASS 3K", "Mobile_Legends_upass_3K_1794095825.txt"),
+        ("YAGAMI ML", "YAGAMI_ML.txt"),
+        ("DEVICE 1000", "device_1000.txt"),
+        ("DEVICE 1000 - V2", "device_1000_1.txt"),
+    ],
+}
 
 app = Flask(__name__)
 
@@ -41,12 +50,23 @@ def show_menu(chat_id):
     markup.add(types.InlineKeyboardButton("ℹ️ About", callback_data="about"))
     bot.send_message(chat_id, "Welcome to Yagami Bot. What do you want?", reply_markup=markup)
 
-def show_files(chat_id):
+def show_categories(chat_id):
     markup = types.InlineKeyboardMarkup()
-    for f in FILES:
-        markup.add(types.InlineKeyboardButton(f"📄 {f}", callback_data=f"getfile:{f}"))
+    markup.add(types.InlineKeyboardButton("🎮 CODM Files", callback_data="cat:CODM"))
+    markup.add(types.InlineKeyboardButton("🎮 ML Files", callback_data="cat:ML"))
     markup.add(types.InlineKeyboardButton("⬅️ Back", callback_data="back"))
-    bot.send_message(chat_id, "📁 Choose a file:", reply_markup=markup)
+    bot.send_message(chat_id, "📁 Pili ka ng Category:", reply_markup=markup)
+
+def show_files(chat_id, category):
+    files = CATEGORIES.get(category, [])
+    if not files:
+        bot.send_message(chat_id, f"Wala pang files sa {category}.")
+        return
+    markup = types.InlineKeyboardMarkup()
+    for title, filename in files:
+        markup.add(types.InlineKeyboardButton(f"📄 {title}", callback_data=f"getfile:{filename}"))
+    markup.add(types.InlineKeyboardButton("⬅️ Back to Categories", callback_data="files"))
+    bot.send_message(chat_id, f"📁 {category} Files - Pili ka:", reply_markup=markup)
 
 if bot:
     @bot.message_handler(commands=['start'])
@@ -65,13 +85,17 @@ if bot:
     def callback(call):
         if call.data == "files":
             bot.answer_callback_query(call.id, "Files")
-            show_files(call.message.chat.id)
+            show_categories(call.message.chat.id)
+        elif call.data.startswith("cat:"):
+            category = call.data.split("cat:")[1]
+            bot.answer_callback_query(call.id, category)
+            show_files(call.message.chat.id, category)
         elif call.data.startswith("getfile:"):
             filename = call.data.split("getfile:")[1]
             bot.answer_callback_query(call.id, filename)
             try:
                 with open(filename, "rb") as f:
-                    bot.send_document(call.message.chat.id, f)
+                    bot.send_document(call.message.chat.id, f, caption=f"📄 {filename}")
             except Exception as e:
                 bot.send_message(call.message.chat.id, f"No file found: {e}\nMake sure {filename} is uploaded to GitHub.")
         elif call.data == "back":
