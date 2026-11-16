@@ -1,52 +1,47 @@
 import os
-import requests
+import random
+import string
+from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 
-TOKEN = os.getenv("BOT_TOKEN", "ILAGAY_MO_DITO_YUNG_TOKEN_MO")
-OWNER_ID = 8089763801 
-BASE = "https://raw.githubusercontent.com/famatiganyuri6-beep/yagami-bot/main/"
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+ADMIN_ID = int(os.environ.get("ADMIN_ID", "0"))
 
-FILES = {
-    "codm_1909_v1": ("CODM 1909 V1", f"{BASE}Codm_0725_1909.txt"),
-    "codm_1909_v2": ("CODM 1909 V2", f"{BASE}Codm_0725_1909_v2.txt"),
-    "codm_1908_v1": ("CODM 1908 V1", f"{BASE}Codm_0725_1908.txt"),
-    "mix_1908_v1": ("MIX 1908 V1", f"{BASE}Mix Codm_0725_1908.txt"),
-    "mix_1908_v2": ("MIX 1908 V2", f"{BASE}Mix Codm_0725_1908_v2.txt"),
-    "clean_1": ("CLEAN CODM 1", f"{BASE}clean_codm_1.txt"),
-    "codm_20261116": ("CODM 20261116", f"{BASE}20261116_1.txt"),
-}
-
-# --- PROTECTION: IKAW LANG MAKAKA-GENERATE ---
-def is_owner(user_id):
-    return user_id == OWNER_ID
+def make_key():
+    date = datetime.now().strftime("%Y%m%d")
+    rand = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+    return f"YAGAMI-CODM-{date}-{rand}"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [[InlineKeyboardButton(name, callback_data=key)] for key, (name, url) in FILES.items()]
-    await update.message.reply_text("Pili ka:", reply_markup=InlineKeyboardMarkup(keyboard))
+    keyboard = [[InlineKeyboardButton("🎮 CODM 20261116", callback_data="codm")]]
+    await update.message.reply_text(
+        "👋 Welcome to Yagami Bot!\n\nPili ka ng game:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
 
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    key = query.data
-    name, url = FILES[key]
-    r = requests.get(url)
-    await query.message.reply_document(document=r.content, filename=f"{name}.txt", caption=name)
+    if query.data == "codm":
+        await query.message.reply_text("Gamitin mo /generate para gumawa ng key.\n⚠️ Admin lang ang makaka-generate.")
 
 async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # DITO YUNG PROTECTION MO, HINDI TO MAWAWALA
-    if not is_owner(update.message.from_user.id):
-        await update.message.reply_text("❌ Ikaw lang ang owner ang pwede mag-generate! Hindi pwede sa iba.")
+    user_id = update.effective_user.id
+    if user_id != ADMIN_ID:
+        await update.message.reply_text("❌ Sorry, Admin lang ang makaka-generate ng key.")
         return
-    await update.message.reply_text("✅ Owner confirmed! Generating key...")
+    key = make_key()
+    await update.message.reply_text(f"✅ Owner confirmed!\n\n🎮 CODM 20261116\n🔑 Key: `{key}`\n\nCopy mo yan!", parse_mode="Markdown")
 
-async def redeem(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Send mo yung key mo:")
+async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(f"Your ID: `{update.effective_user.id}`", parse_mode="Markdown")
 
-app = ApplicationBuilder().token(TOKEN).build()
-app.add_handler(CommandHandler("start", start))
-app.add_handler(CommandHandler("generate", generate))
-app.add_handler(CommandHandler("key", generate))
-app.add_handler(CommandHandler("redeem", redeem))
-app.add_handler(CallbackQueryHandler(button))
-app.run_polling()
+if __name__ == "__main__":
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("generate", generate))
+    app.add_handler(CommandHandler("myid", myid))
+    app.add_handler(CallbackQueryHandler(button))
+    print("Bot started...")
+    app.run_polling()
