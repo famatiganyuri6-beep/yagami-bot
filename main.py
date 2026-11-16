@@ -84,7 +84,8 @@ if bot:
             file_info = bot.get_file(message.document.file_id)
             downloaded = bot.download_file(file_info.file_path)
             text = downloaded.decode('utf-8', errors='ignore')
-            lines = text.splitlines(            seen = set()
+            lines = text.splitlines()           
+            seen = set()
             cleaned = []
             removed = 0
             for line in lines:
