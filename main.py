@@ -11,8 +11,6 @@ MASTER_KEY = "YAGAMIOWNBOT+7914&"
 VALID_KEYS = set([MASTER_KEY])
 ADMIN_IDS = set()
 
-# AYOS NA MAY PAMAGAT AT HIWALAY NA CATEGORY
-# Format: "Pamagat na lalabas" : "tunay na filename sa GitHub"
 CATEGORIES = {
     "CODM": [
         ("CODM 1909 - V1", "Codm_0725_1909_1.txt"),
@@ -43,35 +41,34 @@ def generate_key():
     VALID_KEYS.add(new_key)
     return new_key
 
-def show_menu(chat_id):
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("📁 Files", callback_data="files"))
-    markup.add(types.InlineKeyboardButton("❓ Help", callback_data="help"))
-    markup.add(types.InlineKeyboardButton("ℹ️ About", callback_data="about"))
-    bot.send_message(chat_id, "Welcome to Yagami Bot. What do you want?", reply_markup=markup)
+# ITO YUNG GANYANG MENU SA SCREENSHOT MO - MALAKING BUTTONS SA BABA
+def main_menu():
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    markup.add(
+        types.KeyboardButton("🔑 REDEEM KEY"),
+        types.KeyboardButton("🎮 CODM FILES")
+    )
+    markup.add(
+        types.KeyboardButton("🎮 ML FILES"),
+        types.KeyboardButton("🛠️ ULP & DUPLICATE REMOVER")
+    )
+    markup.add(
+        types.KeyboardButton("📢 CHANNEL"),
+        types.KeyboardButton("ℹ️ ABOUT")
+    )
+    return markup
 
-def show_categories(chat_id):
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("🎮 CODM Files", callback_data="cat:CODM"))
-    markup.add(types.InlineKeyboardButton("🎮 ML Files", callback_data="cat:ML"))
-    markup.add(types.InlineKeyboardButton("⬅️ Back", callback_data="back"))
-    bot.send_message(chat_id, "📁 Pili ka ng Category:", reply_markup=markup)
-
-def show_files(chat_id, category):
+def show_files_inline(chat_id, category):
     files = CATEGORIES.get(category, [])
-    if not files:
-        bot.send_message(chat_id, f"Wala pang files sa {category}.")
-        return
     markup = types.InlineKeyboardMarkup()
     for title, filename in files:
         markup.add(types.InlineKeyboardButton(f"📄 {title}", callback_data=f"getfile:{filename}"))
-    markup.add(types.InlineKeyboardButton("⬅️ Back to Categories", callback_data="files"))
     bot.send_message(chat_id, f"📁 {category} Files - Pili ka:", reply_markup=markup)
 
 if bot:
     @bot.message_handler(commands=['start'])
     def start(message):
-        bot.reply_to(message, "🔒 Enter your key:")
+        bot.send_message(message.chat.id, "Welcome to YAGAMI BOT 🔥\n\nPindutin mo lang sa baba kung anong gusto mo.\n\nPara makapasok, pindutin 🔑 REDEEM KEY at ilagay mo key mo.", reply_markup=main_menu())
 
     @bot.message_handler(commands=['genkey'])
     def genkey(message):
@@ -79,50 +76,86 @@ if bot:
             bot.reply_to(message, "❌ Only admin can generate keys.")
             return
         new_key = generate_key()
-        bot.reply_to(message, f"✅ New key generated:\n`{new_key}`\n\nSend this to your buyer. This key never expires.", parse_mode="Markdown")
+        bot.reply_to(message, f"✅ New key generated:\n`{new_key}`", parse_mode="Markdown")
+
+    @bot.message_handler(content_types=['document'])
+    def handle_doc(message):
+        # ULP & DUPLICATE REMOVER - lilinisin yung txt
+        try:
+            file_info = bot.get_file(message.document.file_id)
+            downloaded = bot.download_file(file_info.file_path)
+            text = downloaded.decode('utf-8', errors='ignore')
+            lines = text.splitlines()
+            seen = set()
+            cleaned = []
+            removed = 0
+            for line in lines:
+                line_strip = line.strip()
+                if line_strip not in seen and line_strip != "":
+                    seen.add(line_strip)
+                    cleaned.append(line_strip)
+                else:
+                    removed += 1
+            out_path = f"cleaned_{message.document.file_name}"
+            with open(out_path, "w", encoding="utf-8") as f:
+                f.write("\n".join(cleaned))
+            with open(out_path, "rb") as f:
+                bot.send_document(message.chat.id, f, caption=f"✅ Done!\nOriginal: {len(lines)} lines\nCleaned: {len(cleaned)} lines\nRemoved: {removed} duplicates")
+            os.remove(out_path)
+        except Exception as e:
+            bot.send_message(message.chat.id, f"Error: {e}\nSend lang ng .txt file.")
 
     @bot.callback_query_handler(func=lambda call: True)
     def callback(call):
-        if call.data == "files":
-            bot.answer_callback_query(call.id, "Files")
-            show_categories(call.message.chat.id)
-        elif call.data.startswith("cat:"):
-            category = call.data.split("cat:")[1]
-            bot.answer_callback_query(call.id, category)
-            show_files(call.message.chat.id, category)
-        elif call.data.startswith("getfile:"):
+        if call.data.startswith("getfile:"):
             filename = call.data.split("getfile:")[1]
             bot.answer_callback_query(call.id, filename)
             try:
                 with open(filename, "rb") as f:
                     bot.send_document(call.message.chat.id, f, caption=f"📄 {filename}")
             except Exception as e:
-                bot.send_message(call.message.chat.id, f"No file found: {e}\nMake sure {filename} is uploaded to GitHub.")
-        elif call.data == "back":
-            bot.answer_callback_query(call.id, "Back")
-            show_menu(call.message.chat.id)
-        elif call.data == "help":
-            bot.answer_callback_query(call.id, "Help")
-            bot.send_message(call.message.chat.id, "Type /start to begin. You need a key to enter.")
-        elif call.data == "about":
-            bot.answer_callback_query(call.id, "About")
-            bot.send_message(call.message.chat.id, "Yagami Bot - Private bot protected by a key.")
+                bot.send_message(call.message.chat.id, f"No file found: {e}")
 
     @bot.message_handler(func=lambda m: True)
-    def check_key(message):
-        if message.text.startswith('/'):
-            return
-        key = message.text.strip()
+    def menu_handler(message):
+        text = message.text.strip()
         user_id = message.from_user.id
-        if key == MASTER_KEY:
+
+        if text == "🔑 REDEEM KEY":
+            bot.send_message(message.chat.id, "🔒 Send mo key mo dito:")
+            return
+
+        if text == "🎮 CODM FILES":
+            show_files_inline(message.chat.id, "CODM")
+            return
+
+        if text == "🎮 ML FILES":
+            show_files_inline(message.chat.id, "ML")
+            return
+
+        if text == "🛠️ ULP & DUPLICATE REMOVER":
+            bot.send_message(message.chat.id, "🛠️ Send mo dito yung .txt file mo na may duplicate.\nLilinisin ko at ibabalik ko sayo na malinis na, walang ulit.")
+            return
+
+        if text == "📢 CHANNEL":
+            bot.send_message(message.chat.id, "📢 Join ka sa channel namin:\nLagay mo dito channel link mo, boss. Halimbawa @yagami_channel")
+            return
+
+        if text == "ℹ️ ABOUT":
+            bot.send_message(message.chat.id, "YAGAMI BOT - Private bot.\nCODM & ML Files | ULP Cleaner\nOwner: @yagami")
+            return
+
+        if text.startswith('/'):
+            return
+
+        # KEY CHECK
+        if text == MASTER_KEY:
             ADMIN_IDS.add(user_id)
-            bot.reply_to(message, "✅ Key accepted! Welcome Admin!")
-            show_menu(message.chat.id)
-        elif key in VALID_KEYS:
-            bot.reply_to(message, "✅ Key accepted! Welcome!")
-            show_menu(message.chat.id)
+            bot.reply_to(message, "✅ Key accepted! Welcome Admin!", reply_markup=main_menu())
+        elif text in VALID_KEYS:
+            bot.reply_to(message, "✅ Key accepted! Welcome!", reply_markup=main_menu())
         else:
-            bot.reply_to(message, "❌ Wrong key. Please try again:")
+            bot.reply_to(message, "❌ Wrong key. Pindutin mo ulit 🔑 REDEEM KEY at try ulit.", reply_markup=main_menu())
 
     def run_bot():
         bot.infinity_polling()
