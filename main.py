@@ -11,8 +11,7 @@ keys = set()
 ok = set()
 
 def mk():
-    characters = string.ascii_uppercase + string.digits
-    return "YAGAMI-" + "".join(secrets.choice(characters) for _ in range(6))
+    return "YAGAMI-" + "".join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6))
 
 def authorized(user_id):
     return user_id == ADMIN_ID or user_id in ok
@@ -21,4 +20,5 @@ def menu(is_admin=False):
     buttons = []
     buttons.append([InlineKeyboardButton("CODM TXT", callback_data="codm")])
     buttons.append([InlineKeyboardButton("ML TXT", callback_data="ml")])
-    if is_admin ==
+    if is_admin == True:
+        buttons.append([InlineKeyboardButton("Generate Key", callback_data="
