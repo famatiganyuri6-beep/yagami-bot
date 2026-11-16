@@ -10,6 +10,7 @@ TOKEN = os.environ.get("BOT_TOKEN", "")
 MASTER_KEY = "YAGAMIOWNBOT+7914&"
 VALID_KEYS = set([MASTER_KEY])
 ADMIN_IDS = set()
+CHANNEL_LINK = "https://t.me/channelseiei"
 
 CATEGORIES = {
     "CODM": [
@@ -108,57 +109,3 @@ if bot:
         if call.data.startswith("getfile:"):
             filename = call.data.split("getfile:")[1]
             bot.answer_callback_query(call.id, filename)
-            try:
-                with open(filename, "rb") as f:
-                    bot.send_document(call.message.chat.id, f, caption=f"📄 {filename}")
-            except Exception as e:
-                bot.send_message(call.message.chat.id, f"No file found: {e}")
-
-    @bot.message_handler(func=lambda m: True)
-    def menu_handler(message):
-        text = message.text.strip()
-        user_id = message.from_user.id
-
-        if text == "🔑 REDEEM KEY":
-            bot.send_message(message.chat.id, "🔒 Please send your key here:")
-            return
-
-        if text == "🎮 CODM FILES":
-            show_files_inline(message.chat.id, "CODM")
-            return
-
-        if text == "🎮 ML FILES":
-            show_files_inline(message.chat.id, "ML")
-            return
-
-        if text == "🛠️ ULP & DUPLICATE REMOVER":
-            bot.send_message(message.chat.id, "🛠️ Send your .txt file with duplicates here.\nI will clean it and send it back with no duplicates.")
-            return
-
-        if text == "📢 CHANNEL":
-            bot.send_message(message.chat.id, "📢 Join our channel:\nPut your channel link here, boss. Example @yagami_channel")
-            return
-
-        if text == "ℹ️ ABOUT":
-            bot.send_message(message.chat.id, "YAGAMI BOT - Private bot.\nCODM & ML Files | ULP Cleaner\nOwner: @yagami")
-            return
-
-        if text.startswith('/'):
-            return
-
-        if text == MASTER_KEY:
-            ADMIN_IDS.add(user_id)
-            bot.reply_to(message, "✅ Key accepted! Welcome Admin!", reply_markup=main_menu())
-        elif text in VALID_KEYS:
-            bot.reply_to(message, "✅ Key accepted! Welcome!", reply_markup=main_menu())
-        else:
-            bot.reply_to(message, "❌ Wrong key. Tap 🔑 REDEEM KEY again and try again.", reply_markup=main_menu())
-
-    def run_bot():
-        bot.infinity_polling()
-
-    threading.Thread(target=run_bot, daemon=True).start()
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
-    
