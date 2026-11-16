@@ -18,5 +18,7 @@ def authorized(user_id):
     return user_id == ADMIN_ID or user_id in ok
 
 def menu(is_admin=False):
-    buttons = [
-        [InlineKeyboardButton("CODM TXT", callback_data="codm")],
+    buttons = []
+    buttons.append([InlineKeyboardButton("CODM TXT", callback_data="codm")])
+    buttons.append([InlineKeyboardButton("ML TXT", callback_data="ml")])
+    if is_admin ==
