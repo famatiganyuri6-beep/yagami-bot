@@ -1,12 +1,15 @@
 import os
 import threading
+import random
+import string
 from flask import Flask
 import telebot
 from telebot import types
 
 TOKEN = os.environ.get("BOT_TOKEN", "")
-ENTRANCE_KEY = "YAGAMIOWNBOT+7914&"
-AUTHORIZED = set()
+MASTER_KEY = "YAGAMIOWNBOT+7914&"
+VALID_KEYS = set([MASTER_KEY])
+ADMIN_IDS = set()
 
 app = Flask(__name__)
 
@@ -15,6 +18,12 @@ def home():
     return "Yagami Bot is alive!"
 
 bot = telebot.TeleBot(TOKEN) if TOKEN else None
+
+def generate_key():
+    code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+    new_key = f"YAGAMI-{code[:4]}-{code[4:]}"
+    VALID_KEYS.add(new_key)
+    return new_key
 
 def show_menu(chat_id):
     markup = types.InlineKeyboardMarkup()
@@ -26,17 +35,18 @@ def show_menu(chat_id):
 if bot:
     @bot.message_handler(commands=['start'])
     def start(message):
-        user_id = message.from_user.id
-        if user_id in AUTHORIZED:
-            show_menu(message.chat.id)
-        else:
-            bot.reply_to(message, "🔒 Enter your key:")
+        bot.reply_to(message, "🔒 Enter your key:")
+
+    @bot.message_handler(commands=['genkey'])
+    def genkey(message):
+        if message.from_user.id not in ADMIN_IDS:
+            bot.reply_to(message, "❌ Only admin can generate keys.")
+            return
+        new_key = generate_key()
+        bot.reply_to(message, f"✅ New key generated:\n`{new_key}`\n\nSend this to your buyer. This key never expires.", parse_mode="Markdown")
 
     @bot.callback_query_handler(func=lambda call: True)
     def callback(call):
-        if call.from_user.id not in AUTHORIZED:
-            bot.answer_callback_query(call.id, "Please enter your key first!")
-            return
         if call.data == "files":
             bot.answer_callback_query(call.id, "Files")
             try:
@@ -55,11 +65,13 @@ if bot:
     def check_key(message):
         if message.text.startswith('/'):
             return
+        key = message.text.strip()
         user_id = message.from_user.id
-        if user_id in AUTHORIZED:
-            return
-        if message.text.strip() == ENTRANCE_KEY:
-            AUTHORIZED.add(user_id)
+        if key == MASTER_KEY:
+            ADMIN_IDS.add(user_id)
+            bot.reply_to(message, "✅ Key accepted! Welcome Admin!")
+            show_menu(message.chat.id)
+        elif key in VALID_KEYS:
             bot.reply_to(message, "✅ Key accepted! Welcome!")
             show_menu(message.chat.id)
         else:
