@@ -12,9 +12,9 @@ bot = telebot.TeleBot(TOKEN)
 keys_db = {}
 
 CATEGORIES = {
-    "CODM": [("CODM 1909 V1", "codm_1909_v1.py"), ("CODM 1909 V2", "codm_1909_v2.py"), ("CODM 1908", "codm_1908.py"), ("MIX CODM", "mix_codm.py")],
-    "ML": [("ML FILE 1", "ml1.py"), ("ML FILE 2", "ml2.py")],
-    "ULP": [("ULP FILE", "ulp.py")],
+    "CODM": ["CODM 1909 V1", "CODM 1909 V2", "CODM 1908", "MIX CODM"],
+    "ML": ["ML FILE 1", "ML FILE 2"],
+    "ULP": ["ULP FILE"],
 }
 
 def generate_key():
@@ -29,8 +29,7 @@ def main_keyboard():
 
 def category_keyboard(category):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
-    files = CATEGORIES.get(category, [])
-    for title, filename in files:
+    for title in CATEGORIES.get(category, []):
         markup.add(title)
     markup.add("⬅️ BACK")
     return markup
@@ -55,7 +54,7 @@ def redeem(message):
         if key == MASTER_KEY or (key in keys_db and not keys_db[key]):
             if key in keys_db:
                 keys_db[key] = True
-            bot.reply_to(message, "✅ Key Accepted! Premium Unlocked.")
+            bot.reply_to(message, "✅ Key Accepted! Premium Unlocked.", reply_markup=main_keyboard())
         else:
             bot.reply_to(message, "❌ Invalid or Already Used.")
     except:
