@@ -85,27 +85,3 @@ if bot:
             downloaded = bot.download_file(file_info.file_path)
             text = downloaded.decode('utf-8', errors='ignore')
             lines = text.splitlines()
-            seen = set()
-            cleaned = []
-            removed = 0
-            for line in lines:
-                line_strip = line.strip()
-                if line_strip not in seen and line_strip != "":
-                    seen.add(line_strip)
-                    cleaned.append(line_strip)
-                else:
-                    removed += 1
-            out_path = f"cleaned_{message.document.file_name}"
-            with open(out_path, "w", encoding="utf-8") as f:
-                f.write("\n".join(cleaned))
-            with open(out_path, "rb") as f:
-                bot.send_document(message.chat.id, f, caption=f"✅ Done!\nOriginal: {len(lines)} lines\nCleaned: {len(cleaned)} lines\nRemoved: {removed} duplicates")
-            os.remove(out_path)
-        except Exception as e:
-            bot.send_message(message.chat.id, f"Error: {e}\nPlease send a .txt file.")
-
-    @bot.callback_query_handler(func=lambda call: True)
-    def callback(call):
-        if call.data.startswith("getfile:"):
-            filename = call.data.split("getfile:")[1]
-            bot.answer_callback_query(call.id, filename)
