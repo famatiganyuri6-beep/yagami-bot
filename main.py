@@ -15,8 +15,8 @@ players = {}
 keys = {}
 used_keys = set()
 
-def is_admin(user_id):
-    return user_id == ADMIN_ID
+def is_admin(uid):
+    return uid == ADMIN_ID
 
 def get_txt_files():
     files = glob.glob("*.txt")
@@ -39,8 +39,47 @@ def back_btn():
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     txt = "Welcome to yagami_bot!\n"
-    txt += "Choose an option below:"
+    txt += "Choose an option below:\n"
+    txt += "Or type /register <IGN>"
     await update.message.reply_text(txt, reply_markup=main_menu())
+
+async def register_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        txt = "Register CODM\n\n"
+        txt += "Type: /register <Your IGN>\n"
+        txt += "Example: /register Yagami"
+        await update.message.reply_text(txt)
+        return
+    ign = " ".join(context.args)
+    uid = update.effective_user.id
+    players[uid] = ign
+    await update.message.reply_text("Registered: " + ign)
+
+async def redeem_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("Type: /redeem <KEY>")
+        return
+    key = context.args[0]
+    uid = update.effective_user.id
+    if key in used_keys:
+        await update.message.reply_text("Key already used!")
+        return
+    used_keys.add(key)
+    ign = players.get(uid, "Unknown")
+    txt = "Key Redeemed Successfully!\n\n"
+    txt += "Key: " + key + "\n"
+    txt += "Player: " + ign + "\n\n"
+    txt += "You now have access!"
+    await update.message.reply_text(txt)
+
+async def tournament_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    txt = "CODM 20261116 Tournament\n\n"
+    txt += "Mode: Battle Royale / Multiplayer\n"
+    txt += "Prize: TBA\n"
+    txt += "Status: Registration Open\n\n"
+    txt += "Registered Players: " + str(len(players)) + "\n\n"
+    txt += "Type /register <IGN> to join!"
+    await update.message.reply_text(txt)
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -48,29 +87,22 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
 
     if data == "back":
-        txt = "Welcome to yagami_bot!\n"
-        txt += "Choose an option below:"
+        txt = "Welcome to yagami_bot!\nChoose an option below:"
         await query.edit_message_text(txt, reply_markup=main_menu())
         return
 
     if data == "games":
-        txt = "Games:\n"
-        txt += "CODM Tournament\n"
-        txt += "Mix Codm\n"
-        txt += "Clean Codm"
+        txt = "Games:\nCODM Tournament\nMix Codm\nClean Codm"
         await query.edit_message_text(txt, reply_markup=back_btn())
         return
 
     if data == "register":
-        txt = "Register:\n"
-        txt += "Send IGN + UID mo."
+        txt = "Register CODM\n\nType: /register <Your IGN>\nExample: /register Yagami"
         await query.edit_message_text(txt, reply_markup=back_btn())
         return
 
     if data == "tournament":
-        txt = "Tournament: CODM 20261116\n"
-        txt += "Status: OPEN\n"
-        txt += "Good luck!"
+        txt = "CODM 20261116 Tournament\nStatus: Registration Open\nPlayers: " + str(len(players))
         await query.edit_message_text(txt, reply_markup=back_btn())
         return
 
@@ -81,11 +113,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             short = f
             if len(f) > 30:
                 short = f[:27] + "..."
-            btn = InlineKeyboardButton(short, callback_data="getfile_" + f)
-            k.append([btn])
+            k.append([InlineKeyboardButton(short, callback_data="getfile_" + f)])
         k.append([InlineKeyboardButton("Back", callback_data="back")])
-        txt = "Files:\n"
-        txt += "Piliin mo file na gusto mo:"
+        txt = "Files:\nPiliin mo file na gusto mo:"
         await query.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(k))
         return
 
@@ -96,20 +126,21 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_document(document=f, filename=filename)
             f.close()
             await query.answer("Na-send ko na!")
-        except Exception as e:
+        except Exception:
             await query.answer("Error!")
         return
 
     if data == "help":
-        txt = "Help:\n"
-        txt += "/start - Open menu\n"
-        txt += "Files - Makita lahat ng txt"
+        txt = "Help:\n/start - Menu\n/register <IGN>\n/redeem <KEY>\n/tournament"
         await query.edit_message_text(txt, reply_markup=back_btn())
         return
 
 def main():
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("register", register_cmd))
+    app.add_handler(CommandHandler("redeem", redeem_cmd))
+    app.add_handler(CommandHandler("tournament", tournament_cmd))
     app.add_handler(CallbackQueryHandler(button_handler))
     print("Bot is running...")
     app.run_polling()
