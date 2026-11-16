@@ -1,85 +1,118 @@
 import os
-import asyncio
-import random
-import string
 import glob
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram import Update
+from telegram import InlineKeyboardButton
+from telegram import InlineKeyboardMarkup
+from telegram.ext import Application
+from telegram.ext import CommandHandler
+from telegram.ext import CallbackQueryHandler
+from telegram.ext import ContextTypes
 
-# Get Token and Admin ID from Render
 TOKEN = os.environ.get("BOT_TOKEN")
 ADMIN_ID = int(os.environ.get("ADMIN_ID", "0"))
 
-# Storage
 players = {}
 keys = {}
 used_keys = set()
 
-# Check if user is admin
 def is_admin(user_id):
     return user_id == ADMIN_ID
 
-# Get all .txt files in same folder
 def get_txt_files():
     files = glob.glob("*.txt")
-    # Wag isama requirements.txt
     files = [f for f in files if f != "requirements.txt"]
     return sorted(files)
 
-# Main Menu Keyboard
 def main_menu():
-    keyboard = [
-        [InlineKeyboardButton("🎮 Games", callback_data="games")],
-        [InlineKeyboardButton("📋 Register", callback_data="register")],
-        [InlineKeyboardButton("🏆 Tournament", callback_data="tournament")],
-        [InlineKeyboardButton("📁 Files", callback_data="files")],
-        [InlineKeyboardButton("❓ Help", callback_data="help")],
-    ]
-    return InlineKeyboardMarkup(keyboard)
+    k = []
+    k.append([InlineKeyboardButton("Games", callback_data="games")])
+    k.append([InlineKeyboardButton("Register", callback_data="register")])
+    k.append([InlineKeyboardButton("Tournament", callback_data="tournament")])
+    k.append([InlineKeyboardButton("Files", callback_data="files")])
+    k.append([InlineKeyboardButton("Help", callback_data="help")])
+    return InlineKeyboardMarkup(k)
 
-# Start Command
+def back_btn():
+    k = []
+    k.append([InlineKeyboardButton("Back", callback_data="back")])
+    return InlineKeyboardMarkup(k)
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    welcome_text = (
-        "Welcome to yagami_bot! 👋\n\n"
-        "🎮 CODM 20261116 Tournament Bot\n"
-        "I am online and ready!\n"
-        "Choose an option below:"
-    )
-    await update.message.reply_text(welcome_text, reply_markup=main_menu())
+    txt = "Welcome to yagami_bot!\n"
+    txt += "Choose an option below:"
+    await update.message.reply_text(txt, reply_markup=main_menu())
 
-# Button Handler - LAHAT NG BUTTON DITO
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     data = query.data
 
-    # BACK TO MENU
     if data == "back":
-        await query.edit_message_text(
-            "Welcome to yagami_bot! 👋\n\n"
-            "🎮 CODM 20261116 Tournament Bot\n"
-            "I am online and ready!\n"
-            "Choose an option below:",
-            reply_markup=main_menu()
-        )
+        txt = "Welcome to yagami_bot!\n"
+        txt += "Choose an option below:"
+        await query.edit_message_text(txt, reply_markup=main_menu())
         return
 
-    # GAMES
     if data == "games":
-        keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="back")]]
-        await query.edit_message_text(
-            "🎮 Games:\n\n"
-            "• CODM Tournament\n"
-            "• Mix Codm\n"
-            "• Clean Codm\n\n"
-            "Piliin mo sa Files yung account na gusto mo.",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        txt = "Games:\n"
+        txt += "CODM Tournament\n"
+        txt += "Mix Codm\n"
+        txt += "Clean Codm"
+        await query.edit_message_text(txt, reply_markup=back_btn())
         return
 
-    # REGISTER
     if data == "register":
-        keyboard = [[InlineKeyboardButton("⬅️ Back", callback_data="back")]]
-        await query.edit_message_text(
-            "📋 Register:\n\n"
-            "Send mo yung IGN + UID
+        txt = "Register:\n"
+        txt += "Send IGN + UID mo."
+        await query.edit_message_text(txt, reply_markup=back_btn())
+        return
+
+    if data == "tournament":
+        txt = "Tournament: CODM 20261116\n"
+        txt += "Status: OPEN\n"
+        txt += "Good luck!"
+        await query.edit_message_text(txt, reply_markup=back_btn())
+        return
+
+    if data == "files":
+        files = get_txt_files()
+        k = []
+        for f in files:
+            short = f
+            if len(f) > 30:
+                short = f[:27] + "..."
+            btn = InlineKeyboardButton(short, callback_data="getfile_" + f)
+            k.append([btn])
+        k.append([InlineKeyboardButton("Back", callback_data="back")])
+        txt = "Files:\n"
+        txt += "Piliin mo file na gusto mo:"
+        await query.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(k))
+        return
+
+    if data.startswith("getfile_"):
+        filename = data.replace("getfile_", "", 1)
+        try:
+            f = open(filename, "rb")
+            await query.message.reply_document(document=f, filename=filename)
+            f.close()
+            await query.answer("Na-send ko na!")
+        except Exception as e:
+            await query.answer("Error!")
+        return
+
+    if data == "help":
+        txt = "Help:\n"
+        txt += "/start - Open menu\n"
+        txt += "Files - Makita lahat ng txt"
+        await query.edit_message_text(txt, reply_markup=back_btn())
+        return
+
+def main():
+    app = Application.builder().token(TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(button_handler))
+    print("Bot is running...")
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
