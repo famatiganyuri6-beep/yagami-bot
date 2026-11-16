@@ -4,7 +4,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 
 TOKEN = os.getenv("BOT_TOKEN", "ILAGAY_MO_DITO_YUNG_TOKEN_MO")
-OWNER_ID = 123456789  # <-- PALITAN MO NG TELEGRAM ID MO, YUNG DATI MONG ID!
+OWNER_ID = 8089763801 
 BASE = "https://raw.githubusercontent.com/famatiganyuri6-beep/yagami-bot/main/"
 
 FILES = {
