@@ -3,11 +3,12 @@ import os
 import random
 import string
 from telebot import types
+from flask import Flask
+import threading
 
 TOKEN = os.environ.get("BOT_TOKEN")
 OWNER_ID = 8089763801
 MASTER_KEY = "YAGAMIOWNBOT+7914&"
-
 bot = telebot.TeleBot(TOKEN)
 keys_db = {}
 
@@ -79,6 +80,19 @@ def handle_buttons(message):
         bot.send_message(message.chat.id, "Choose:", reply_markup=main_keyboard())
     elif text in ["CODM 1909 V1", "CODM 1909 V2", "CODM 1908", "MIX CODM", "ML FILE 1", "ML FILE 2", "ULP FILE"]:
         bot.send_message(message.chat.id, f"You selected {text}. File is locked. Redeem a key first.", reply_markup=main_keyboard())
+
+# --- PAMPAGISING PARA HINDI MATULOG SA RENDER ---
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Yagami Bot is Alive!"
+
+def run_web():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
+
+threading.Thread(target=run_web, daemon=True).start()
 
 print("Bot is running...")
 bot.polling(none_stop=True)
