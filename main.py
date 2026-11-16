@@ -1,51 +1,49 @@
 
 import os
-import asyncio
+import io
 import sqlite3
-import hashlib
 import secrets
+import hashlib
 from pathlib import Path
 from datetime import datetime, timezone
 
 from telegram import (
     Update,
+    ReplyKeyboardMarkup,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
 )
 from telegram.ext import (
     Application,
     CommandHandler,
-    CallbackQueryHandler,
     MessageHandler,
+    CallbackQueryHandler,
     ContextTypes,
     filters,
 )
 
-# ==============================
+# =====================================
 # CONFIGURATION
-# ==============================
+# =====================================
 
 TOKEN = os.environ.get("BOT_TOKEN")
 ADMIN_ID = int(os.environ.get("ADMIN_ID", "0"))
 
-DB_PATH = os.environ.get(
-    "DATABASE_PATH",
-    "/var/data/yagami.db"
-)
+DB_PATH = os.environ.get("DATABASE_PATH", "yagami.db")
 
 Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
 
 
-# ==============================
+# =====================================
 # DATABASE
-# ==============================
+# =====================================
 
-def db():
-    return sqlite3.connect(DB_PATH)
+def connect_db():
+    return sqlite3.connect(DB_PATH, timeout=20)
 
 
-def init_db():
-    with db() as conn:
+def initialize_database():
+    with connect_db() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 user_id INTEGER PRIMARY KEY,
@@ -54,7 +52,7 @@ def init_db():
         """)
 
         conn.execute("""
-            CREATE TABLE IF NOT EXISTS keys (
+            CREATE TABLE IF NOT EXISTS access_keys (
                 key_hash TEXT PRIMARY KEY,
                 created_at TEXT NOT NULL
             )
@@ -65,129 +63,150 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 game TEXT NOT NULL,
                 label TEXT NOT NULL,
-                added_at TEXT NOT NULL
+                created_at TEXT NOT NULL
             )
         """)
 
 
-def now():
+def timestamp():
     return datetime.now(timezone.utc).isoformat()
 
 
-def hash_key(key):
-    return hashlib.sha256(key.encode()).hexdigest()
+def hash_key(value):
+    return hashlib.sha256(value.encode()).hexdigest()
+
+
+def is_owner(user_id):
+    return user_id == ADMIN_ID
 
 
 def is_authorized(user_id):
-    if user_id == ADMIN_ID:
+    if is_owner(user_id):
         return True
 
-    with db() as conn:
+    with connect_db() as conn:
         result = conn.execute(
-            "SELECT user_id FROM users WHERE user_id = ?",
+            "SELECT 1 FROM users WHERE user_id = ?",
             (user_id,)
         ).fetchone()
 
     return result is not None
 
 
+# =====================================
+# KEY SYSTEM
+# =====================================
+
 def generate_key():
     return "YAGAMI-" + secrets.token_hex(4).upper()
 
 
-def save_key(key):
-    with db() as conn:
+def create_key():
+    key = generate_key()
+
+    with connect_db() as conn:
         conn.execute(
-            "INSERT INTO keys (key_hash, created_at) VALUES (?, ?)",
-            (hash_key(key), now())
+            "INSERT INTO access_keys VALUES (?, ?)",
+            (hash_key(key), timestamp())
         )
+
+    return key
 
 
 def redeem_key(user_id, key):
-    with db() as conn:
+    with connect_db() as conn:
         result = conn.execute(
-            "SELECT key_hash FROM keys WHERE key_hash = ?",
-            (hash_key(key),)
+            "SELECT 1 FROM access_keys WHERE key_hash = ?",
+            (hash_key(key.strip()),)
         ).fetchone()
 
         if not result:
             return False
 
         conn.execute(
-            "DELETE FROM keys WHERE key_hash = ?",
-            (hash_key(key),)
+            "DELETE FROM access_keys WHERE key_hash = ?",
+            (hash_key(key.strip()),)
         )
 
         conn.execute(
-            "INSERT OR IGNORE INTO users (user_id, created_at) VALUES (?, ?)",
-            (user_id, now())
+            "INSERT OR IGNORE INTO users VALUES (?, ?)",
+            (user_id, timestamp())
         )
 
     return True
 
 
-# ==============================
-# KEYBOARDS
-# ==============================
+# =====================================
+# MAIN KEYBOARD
+# =====================================
 
-def main_menu(is_admin=False):
+def main_menu(owner=False):
     buttons = [
-        [
-            InlineKeyboardButton(
-                "🎮 CODM TXT",
-                callback_data="codm"
-            ),
-            InlineKeyboardButton(
-                "🔥 ML TXT",
-                callback_data="ml"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "❓ Help",
-                callback_data="help"
-            )
-        ]
+        ["📂 GENERATE FILES", "📊 MY STATISTICS"],
+        ["🔑 REDEEM KEY", "🎮 CODM TXT"],
+        ["🔥 ML TXT", "🔐 SECURITY TOOLS"],
     ]
 
-    if is_admin:
-        buttons.append([
-            InlineKeyboardButton(
-                "👑 OWNER PANEL",
-                callback_data="panel"
-            )
-        ])
+    if owner:
+        buttons.append(["👑 OWNER PANEL"])
 
-    return InlineKeyboardMarkup(buttons)
+    return ReplyKeyboardMarkup(
+        buttons,
+        resize_keyboard=True
+    )
 
+
+# =====================================
+# OWNER PANEL
+# =====================================
 
 def owner_menu():
     buttons = [
         [
             InlineKeyboardButton(
-                "🔑 Generate Key",
-                callback_data="genkey"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "👥 Manage Users",
-                callback_data="users"
+                "📂 GENERATE FILES",
+                callback_data="generate"
             ),
             InlineKeyboardButton(
-                "📊 Statistics",
+                "📊 MY STATISTICS",
                 callback_data="stats"
             )
         ],
         [
             InlineKeyboardButton(
-                "📁 Catalog Info",
-                callback_data="catalog_info"
+                "🔑 GENERATE KEY",
+                callback_data="genkey"
+            ),
+            InlineKeyboardButton(
+                "👥 MANAGE USERS",
+                callback_data="users"
             )
         ],
         [
             InlineKeyboardButton(
-                "⬅️ Back to Menu",
+                "🎮 CODM CATALOG",
+                callback_data="codm"
+            ),
+            InlineKeyboardButton(
+                "🔥 ML CATALOG",
+                callback_data="ml"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "📁 CATALOG MANAGEMENT",
+                callback_data="catalog"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "🔒 SECURITY SETTINGS",
+                callback_data="security"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "⬅️ BACK TO MENU",
                 callback_data="home"
             )
         ]
@@ -196,186 +215,83 @@ def owner_menu():
     return InlineKeyboardMarkup(buttons)
 
 
-# ==============================
-# START COMMAND
-# ==============================
+# =====================================
+# START
+# =====================================
 
-async def start(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
-    if user_id == ADMIN_ID:
+    if is_owner(user_id):
         await update.effective_message.reply_text(
-            "👑 Welcome to YAGAMI BOT, Owner!",
+            "👑 WELCOME TO YAGAMI BOT, OWNER!\n\n"
+            "All owner controls are available below.",
             reply_markup=main_menu(True)
         )
 
     elif is_authorized(user_id):
         await update.effective_message.reply_text(
-            "👋 Welcome to YAGAMI BOT!",
+            "👋 WELCOME TO YAGAMI BOT!",
             reply_markup=main_menu(False)
         )
 
     else:
+        context.user_data["waiting_key"] = True
+
         await update.effective_message.reply_text(
-            "🔒 Welcome to YAGAMI BOT\n\n"
+            "🔒 ACCESS REQUIRED\n\n"
             "This bot is private.\n"
-            "Please enter your Entrance Key:"
+            "Enter your Entrance Key to continue."
         )
 
 
-# ==============================
+# =====================================
 # GENERATE KEY
-# ==============================
+# =====================================
 
-async def newkey(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-    if update.effective_user.id != ADMIN_ID:
+async def generate_new_key(update, context):
+    if not is_owner(update.effective_user.id):
         await update.effective_message.reply_text(
             "❌ Owner access only."
         )
         return
 
-    key = generate_key()
-    save_key(key)
+    key = create_key()
 
     await update.effective_message.reply_text(
-        f"🔑 NEW ENTRANCE KEY\n\n{key}\n\n"
-        "This key can only be used once."
+        "🔑 NEW ENTRANCE KEY\n\n"
+        f"{key}\n\n"
+        "This key can only be redeemed once."
     )
 
 
-# ==============================
-# KEY VERIFICATION
-# ==============================
+# =====================================
+# REDEEM KEY
+# =====================================
 
-async def check_key(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
+async def redeem_command(update, context):
     user_id = update.effective_user.id
-    text = update.effective_message.text.strip()
 
     if is_authorized(user_id):
         await update.effective_message.reply_text(
-            "Use the buttons to navigate the bot."
+            "✅ You already have access."
         )
         return
 
-    if redeem_key(user_id, text):
-        await update.effective_message.reply_text(
-            "✅ Key Accepted!\n"
-            "Welcome to YAGAMI BOT!",
-            reply_markup=main_menu(False)
-        )
-    else:
-        await update.effective_message.reply_text(
-            "❌ Invalid or already used key.\n"
-            "Please try again."
-        )
-
-
-# ==============================
-# CATALOG MANAGEMENT
-# ==============================
-
-async def add_catalog(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    game: str
-):
-    if update.effective_user.id != ADMIN_ID:
-        await update.effective_message.reply_text(
-            "❌ Owner access only."
-        )
-        return
-
-    label = " ".join(context.args).strip()
-
-    if not label:
-        await update.effective_message.reply_text(
-            f"Usage: /add{game.lower()} Account 001"
-        )
-        return
-
-    if len(label) > 60 or any(
-        word in label.lower()
-        for word in ("password", "passwd", "login", "token", "email")
-    ) or "@" in label:
-        await update.effective_message.reply_text(
-            "❌ Use a short, non-sensitive account label only."
-        )
-        return
-
-    with db() as conn:
-        cursor = conn.execute(
-            """
-            INSERT INTO catalog (game, label, added_at)
-            VALUES (?, ?, ?)
-            """,
-            (game, label, now())
-        )
-        item_id = cursor.lastrowid
+    context.user_data["waiting_key"] = True
 
     await update.effective_message.reply_text(
-        f"✅ Catalog entry added!\n\n"
-        f"Game: {game}\n"
-        f"ID: {item_id}\n"
-        f"Label: {label}"
+        "🔑 REDEEM KEY\n\n"
+        "Please enter your Entrance Key."
     )
 
 
-async def addcodm(update, context):
-    await add_catalog(update, context, "CODM")
+# =====================================
+# ACCOUNT CATALOG
+# =====================================
 
-
-async def addml(update, context):
-    await add_catalog(update, context, "ML")
-
-
-async def delete_item(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-    if update.effective_user.id != ADMIN_ID:
-        await update.effective_message.reply_text(
-            "❌ Owner access only."
-        )
-        return
-
-    if not context.args or not context.args[0].isdigit():
-        await update.effective_message.reply_text(
-            "Usage: /delitem 1"
-        )
-        return
-
-    item_id = int(context.args[0])
-
-    with db() as conn:
-        cursor = conn.execute(
-            "DELETE FROM catalog WHERE id = ?",
-            (item_id,)
-        )
-
-    if cursor.rowcount:
-        await update.effective_message.reply_text(
-            "✅ Catalog entry deleted."
-        )
-    else:
-        await update.effective_message.reply_text(
-            "❌ Catalog entry not found."
-        )
-
-
-async def show_catalog(
-    message,
-    game: str
-):
-    with db() as conn:
+async def show_catalog(message, game):
+    with connect_db() as conn:
         rows = conn.execute(
             """
             SELECT id, label FROM catalog
@@ -387,7 +303,8 @@ async def show_catalog(
 
     if not rows:
         await message.reply_text(
-            f"📁 {game} CATALOG\n\nNo account entries available."
+            f"📁 {game} ACCOUNT CATALOG\n\n"
+            "No catalog entries available."
         )
         return
 
@@ -399,49 +316,155 @@ async def show_catalog(
     for item_id, label in rows:
         lines.append(f"#{item_id} - {label}")
 
-    lines.append("")
-    lines.append("🔒 Login credentials are not displayed.")
+    lines.extend([
+        "",
+        "🔒 Private login credentials are never displayed."
+    ])
 
     await message.reply_text("\n".join(lines))
 
 
-# ==============================
-# OWNER INFORMATION
-# ==============================
+# =====================================
+# ADD CATALOG ENTRY
+# =====================================
 
-async def show_users(message):
-    with db() as conn:
+async def add_catalog(update, context, game):
+    if not is_owner(update.effective_user.id):
+        await update.effective_message.reply_text(
+            "❌ Owner access only."
+        )
+        return
+
+    label = " ".join(context.args).strip()
+
+    blocked = (
+        "password", "passwd", "login",
+        "token", "email", "credential"
+    )
+
+    if (
+        not label
+        or len(label) > 60
+        or "@" in label
+        or any(word in label.lower() for word in blocked)
+    ):
+        await update.effective_message.reply_text(
+            "❌ Enter a valid non-sensitive account label."
+        )
+        return
+
+    with connect_db() as conn:
+        conn.execute(
+            """
+            INSERT INTO catalog (game, label, created_at)
+            VALUES (?, ?, ?)
+            """,
+            (game, label, timestamp())
+        )
+
+    await update.effective_message.reply_text(
+        f"✅ {game} catalog entry added!\n\n"
+        f"Account Label: {label}"
+    )
+
+
+async def add_codm(update, context):
+    await add_catalog(update, context, "CODM")
+
+
+async def add_ml(update, context):
+    await add_catalog(update, context, "ML")
+
+
+# =====================================
+# DELETE CATALOG ENTRY
+# =====================================
+
+async def delete_catalog(update, context):
+    if not is_owner(update.effective_user.id):
+        await update.effective_message.reply_text(
+            "❌ Owner access only."
+        )
+        return
+
+    if not context.args or not context.args[0].isdigit():
+        await update.effective_message.reply_text(
+            "Usage: /delete 1"
+        )
+        return
+
+    item_id = int(context.args[0])
+
+    with connect_db() as conn:
+        cursor = conn.execute(
+            "DELETE FROM catalog WHERE id = ?",
+            (item_id,)
+        )
+
+    if cursor.rowcount:
+        await update.effective_message.reply_text(
+            "✅ Catalog entry deleted."
+        )
+    else:
+        await update.effective_message.reply_text(
+            "❌ Entry not found."
+        )
+
+
+# =====================================
+# GENERATE SAFE CATALOG FILE
+# =====================================
+
+async def generate_file(message):
+    with connect_db() as conn:
         rows = conn.execute(
-            "SELECT user_id FROM users ORDER BY created_at DESC LIMIT 30"
+            """
+            SELECT game, id, label
+            FROM catalog
+            ORDER BY game, id
+            """
         ).fetchall()
 
-        total = conn.execute(
-            "SELECT COUNT(*) FROM users"
-        ).fetchone()[0]
+    if not rows:
+        await message.reply_text(
+            "📂 No catalog entries available."
+        )
+        return
 
-    lines = [
-        "👥 AUTHORIZED USERS",
-        f"Total Users: {total}",
-        ""
-    ]
+    output = ["YAGAMI BOT ACCOUNT CATALOG", ""]
 
-    if rows:
-        for row in rows:
-            lines.append(f"• {row[0]}")
-    else:
-        lines.append("No authorized users yet.")
+    for game, item_id, label in rows:
+        output.append(f"{game} | ID: {item_id} | {label}")
 
-    await message.reply_text("\n".join(lines))
+    output.extend([
+        "",
+        "This export contains non-sensitive labels only."
+    ])
+
+    file_data = io.BytesIO(
+        "\n".join(output).encode("utf-8")
+    )
+
+    file_data.name = "yagami_catalog.txt"
+
+    await message.reply_document(
+        document=file_data,
+        caption="📂 YAGAMI BOT CATALOG EXPORT"
+    )
 
 
-async def show_stats(message):
-    with db() as conn:
+# =====================================
+# STATISTICS
+# =====================================
+
+async def show_statistics(message):
+    with connect_db() as conn:
         users = conn.execute(
             "SELECT COUNT(*) FROM users"
         ).fetchone()[0]
 
         keys = conn.execute(
-            "SELECT COUNT(*) FROM keys"
+            "SELECT COUNT(*) FROM access_keys"
         ).fetchone()[0]
 
         codm = conn.execute(
@@ -455,20 +478,76 @@ async def show_stats(message):
     await message.reply_text(
         "📊 YAGAMI BOT STATISTICS\n\n"
         f"👥 Authorized Users: {users}\n"
-        f"🔑 Unused Keys: {keys}\n"
+        f"🔑 Available Keys: {keys}\n"
         f"🎮 CODM Entries: {codm}\n"
         f"🔥 ML Entries: {ml}"
     )
 
 
-# ==============================
-# BUTTON HANDLER
-# ==============================
+# =====================================
+# USER MANAGEMENT
+# =====================================
 
-async def button_handler(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
+async def show_users(message):
+    with connect_db() as conn:
+        rows = conn.execute(
+            """
+            SELECT user_id FROM users
+            ORDER BY created_at DESC
+            LIMIT 30
+            """
+        ).fetchall()
+
+    lines = ["👥 AUTHORIZED USERS", ""]
+
+    for row in rows:
+        lines.append(f"• {row[0]}")
+
+    if not rows:
+        lines.append("No authorized users.")
+
+    await message.reply_text("\n".join(lines))
+
+
+async def revoke_user(update, context):
+    if not is_owner(update.effective_user.id):
+        await update.effective_message.reply_text(
+            "❌ Owner access only."
+        )
+        return
+
+    if not context.args or not context.args[0].isdigit():
+        await update.effective_message.reply_text(
+            "Usage: /revoke USER_ID"
+        )
+        return
+
+    target = int(context.args[0])
+
+    if target == ADMIN_ID:
+        await update.effective_message.reply_text(
+            "❌ The owner cannot be removed."
+        )
+        return
+
+    with connect_db() as conn:
+        cursor = conn.execute(
+            "DELETE FROM users WHERE user_id = ?",
+            (target,)
+        )
+
+    await update.effective_message.reply_text(
+        "✅ User access revoked."
+        if cursor.rowcount
+        else "❌ User not found."
+    )
+
+
+# =====================================
+# BUTTON HANDLER
+# =====================================
+
+async def button_handler(update, context):
     query = update.callback_query
     await query.answer()
 
@@ -477,114 +556,166 @@ async def button_handler(
 
     if not is_authorized(user_id):
         await query.message.reply_text(
-            "🔒 Access denied. Please enter your Entrance Key."
+            "🔒 Access denied."
         )
         return
 
-    if data == "codm":
+    if data == "home":
+        await query.message.reply_text(
+            "🏠 MAIN MENU",
+            reply_markup=main_menu(is_owner(user_id))
+        )
+
+    elif data == "panel":
+        if not is_owner(user_id):
+            return
+
+        await query.message.reply_text(
+            "👑 YAGAMI OWNER PANEL",
+            reply_markup=owner_menu()
+        )
+
+    elif data == "genkey":
+        if not is_owner(user_id):
+            return
+
+        key = create_key()
+
+        await query.message.reply_text(
+            f"🔑 NEW ENTRANCE KEY\n\n{key}"
+        )
+
+    elif data == "generate":
+        await generate_file(query.message)
+
+    elif data == "stats":
+        await show_statistics(query.message)
+
+    elif data == "users":
+        if is_owner(user_id):
+            await show_users(query.message)
+
+    elif data == "codm":
         await show_catalog(query.message, "CODM")
 
     elif data == "ml":
         await show_catalog(query.message, "ML")
 
-    elif data == "help":
-        await query.message.reply_text(
-            "❓ YAGAMI BOT HELP\n\n"
-            "1. Generate an entrance key from the Owner Panel.\n"
-            "2. Enter the key to gain access.\n"
-            "3. Select CODM TXT or ML TXT.\n"
-            "4. Browse the safe account catalog."
-        )
-
-    elif data == "panel":
-        if user_id != ADMIN_ID:
-            await query.message.reply_text(
-                "❌ Owner access only."
-            )
-            return
-
-        await query.message.reply_text(
-            "👑 YAGAMI OWNER PANEL\n\n"
-            "Select an option:",
-            reply_markup=owner_menu()
-        )
-
-    elif data == "genkey":
-        if user_id != ADMIN_ID:
-            return
-
-        key = generate_key()
-        save_key(key)
-
-        await query.message.reply_text(
-            f"🔑 NEW ENTRANCE KEY\n\n{key}\n\n"
-            "Single-use key generated successfully."
-        )
-
-    elif data == "users":
-        if user_id == ADMIN_ID:
-            await show_users(query.message)
-
-    elif data == "stats":
-        if user_id == ADMIN_ID:
-            await show_stats(query.message)
-
-    elif data == "catalog_info":
-        if user_id == ADMIN_ID:
+    elif data == "catalog":
+        if is_owner(user_id):
             await query.message.reply_text(
                 "📁 CATALOG MANAGEMENT\n\n"
-                "Add CODM entry:\n"
-                "/addcodm Account 001\n\n"
-                "Add ML entry:\n"
-                "/addml Account 001\n\n"
-                "Delete entry:\n"
-                "/delitem 1\n\n"
-                "Use labels only. Never enter passwords or login details."
+                "/addcodm Account 001\n"
+                "/addml Account 001\n"
+                "/delete 1\n\n"
+                "Use non-sensitive labels only."
             )
 
-    elif data == "home":
-        await query.message.reply_text(
-            "🏠 Main Menu",
-            reply_markup=main_menu(user_id == ADMIN_ID)
+    elif data == "security":
+        if is_owner(user_id):
+            await query.message.reply_text(
+                "🔒 SECURITY SETTINGS\n\n"
+                "• Owner-only administration\n"
+                "• Single-use entrance keys\n"
+                "• Persistent authorization database\n"
+                "• No credential exports\n"
+                "• File uploads disabled"
+            )
+
+
+# =====================================
+# TEXT HANDLER
+# =====================================
+
+async def text_handler(update, context):
+    user_id = update.effective_user.id
+    text = update.effective_message.text.strip()
+
+    if not is_authorized(user_id):
+        if context.user_data.get("waiting_key"):
+            if redeem_key(user_id, text):
+                context.user_data["waiting_key"] = False
+
+                await update.effective_message.reply_text(
+                    "✅ KEY ACCEPTED!\n\n"
+                    "Welcome to YAGAMI BOT.",
+                    reply_markup=main_menu(False)
+                )
+            else:
+                await update.effective_message.reply_text(
+                    "❌ Invalid or already used key."
+                )
+        else:
+            await update.effective_message.reply_text(
+                "🔒 Access denied. Use /start to enter your key."
+            )
+        return
+
+    if text == "📂 GENERATE FILES":
+        await generate_file(update.effective_message)
+
+    elif text == "📊 MY STATISTICS":
+        await show_statistics(update.effective_message)
+
+    elif text == "🔑 REDEEM KEY":
+        await redeem_command(update, context)
+
+    elif text == "🎮 CODM TXT":
+        await show_catalog(update.effective_message, "CODM")
+
+    elif text == "🔥 ML TXT":
+        await show_catalog(update.effective_message, "ML")
+
+    elif text == "🔐 SECURITY TOOLS":
+        await update.effective_message.reply_text(
+            "🔐 SECURITY CENTER\n\n"
+            "Credential distribution and automated "
+            "account-access tools are disabled."
+        )
+
+    elif text == "👑 OWNER PANEL":
+        if is_owner(user_id):
+            await update.effective_message.reply_text(
+                "👑 YAGAMI OWNER PANEL",
+                reply_markup=owner_menu()
+            )
+
+    else:
+        await update.effective_message.reply_text(
+            "Please select an option from the menu."
         )
 
 
-# ==============================
-# DOCUMENT SECURITY
-# ==============================
+# =====================================
+# DOCUMENT HANDLER
+# =====================================
 
-async def reject_documents(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
+async def reject_documents(update, context):
     await update.effective_message.reply_text(
-        "🔒 File uploads are disabled for security.\n\n"
-        "Please use the safe account catalog instead."
+        "🔒 File uploads are disabled.\n\n"
+        "Use the non-sensitive account catalog instead."
     )
 
 
-# ==============================
-# HELP COMMAND
-# ==============================
+# =====================================
+# HELP
+# =====================================
 
-async def help_command(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
+async def help_command(update, context):
     await update.effective_message.reply_text(
         "❓ YAGAMI BOT HELP\n\n"
-        "/start - Open main menu\n"
-        "/help - Show help\n"
-        "/newkey - Generate key (Owner only)\n"
-        "/panel - Open Owner Panel (Owner only)"
+        "/start - Start bot\n"
+        "/panel - Owner panel\n"
+        "/newkey - Generate entrance key\n"
+        "/addcodm - Add CODM catalog label\n"
+        "/addml - Add ML catalog label\n"
+        "/delete - Delete catalog entry\n"
+        "/revoke - Revoke user access"
     )
 
 
-async def panel_command(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-    if update.effective_user.id != ADMIN_ID:
+async def panel_command(update, context):
+    if not is_owner(update.effective_user.id):
         await update.effective_message.reply_text(
             "❌ Owner access only."
         )
@@ -596,23 +727,31 @@ async def panel_command(
     )
 
 
-# ==============================
-# BOT STARTUP
-# ==============================
+# =====================================
+# MAIN
+# =====================================
 
-async def run_bot():
-    init_db()
+def main():
+    if not TOKEN:
+        raise ValueError("BOT_TOKEN is missing.")
+
+    if ADMIN_ID <= 0:
+        raise ValueError("ADMIN_ID is missing.")
+
+    initialize_database()
 
     app = Application.builder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("panel", panel_command))
-    app.add_handler(CommandHandler("newkey", newkey))
+    app.add_handler(CommandHandler("newkey", generate_new_key))
+    app.add_handler(CommandHandler("redeem", redeem_command))
 
-    app.add_handler(CommandHandler("addcodm", addcodm))
-    app.add_handler(CommandHandler("addml", addml))
-    app.add_handler(CommandHandler("delitem", delete_item))
+    app.add_handler(CommandHandler("addcodm", add_codm))
+    app.add_handler(CommandHandler("addml", add_ml))
+    app.add_handler(CommandHandler("delete", delete_catalog))
+    app.add_handler(CommandHandler("revoke", revoke_user))
 
     app.add_handler(CallbackQueryHandler(button_handler))
 
@@ -626,51 +765,15 @@ async def run_bot():
     app.add_handler(
         MessageHandler(
             filters.TEXT & ~filters.COMMAND,
-            check_key
+            text_handler
         )
     )
 
-    initialized = False
-    started = False
-    polling = False
+    print("YAGAMI BOT is running successfully!")
 
-    try:
-        await app.initialize()
-        initialized = True
-
-        await app.start()
-        started = True
-
-        await app.updater.start_polling(
-            drop_pending_updates=True
-        )
-        polling = True
-
-        print("YAGAMI BOT is running successfully!")
-
-        await asyncio.Event().wait()
-
-    finally:
-        if polling:
-            await app.updater.stop()
-
-        if started:
-            await app.stop()
-
-        if initialized:
-            await app.shutdown()
-
-
-def main():
-    if not TOKEN:
-        raise ValueError("BOT_TOKEN is missing.")
-
-    if ADMIN_ID <= 0:
-        raise ValueError("ADMIN_ID is missing or invalid.")
-
-    asyncio.run(run_bot())
+    app.run_polling(drop_pending_updates=True)
 
 
 if __name__ == "__main__":
     main()
-    
+        
