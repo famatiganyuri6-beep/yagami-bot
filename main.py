@@ -44,15 +44,13 @@ def generate_key():
     return new_key
 
 def main_menu():
-    markup = types.InlineKeyboardMarkup(row_width=2)
-    markup.add(
-        types.InlineKeyboardButton("🔑 REDEEM KEY", callback_data="menu_redeem"),
-        types.InlineKeyboardButton("🎮 CODM FILES", callback_data="menu_codm"),
-        types.InlineKeyboardButton("🎮 ML FILES", callback_data="menu_ml"),
-        types.InlineKeyboardButton("🛠️ ULP & DUPLICATE REMOVER", callback_data="menu_ulp"),
-        types.InlineKeyboardButton("📢 CHANNEL", callback_data="menu_channel"),
-        types.InlineKeyboardButton("ℹ️ ABOUT", callback_data="menu_about")
-    )
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("🔑 REDEEM KEY", callback_data="menu_redeem"))
+    markup.add(types.InlineKeyboardButton("🎮 CODM", callback_data="menu_codm"))
+    markup.add(types.InlineKeyboardButton("🎮 ML", callback_data="menu_ml"))
+    markup.add(types.InlineKeyboardButton("🛠️ ULP", callback_data="menu_ulp"))
+    markup.add(types.InlineKeyboardButton("📢 CHANNEL", callback_data="menu_channel"))
+    markup.add(types.InlineKeyboardButton("ℹ️ ABOUT", callback_data="menu_about"))
     return markup
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("menu_"))
