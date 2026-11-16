@@ -44,21 +44,26 @@ def generate_key():
     return new_key
 
 def main_menu():
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    markup = types.InlineKeyboardMarkup(row_width=2)
     markup.add(
-        types.KeyboardButton("🔑 REDEEM KEY"),
-        types.KeyboardButton("🎮 CODM FILES")
-    )
-    markup.add(
-        types.KeyboardButton("🎮 ML FILES"),
-        types.KeyboardButton("🛠️ ULP & DUPLICATE REMOVER")
-    )
-    markup.add(
-        types.KeyboardButton("📢 CHANNEL"),
-        types.KeyboardButton("ℹ️ ABOUT")
+        types.InlineKeyboardButton("🔑 REDEEM KEY", callback_data="menu_redeem"),
+        types.InlineKeyboardButton("🎮 CODM FILES", callback_data="menu_codm"),
+        types.InlineKeyboardButton("🎮 ML FILES", callback_data="menu_ml"),
+        types.InlineKeyboardButton("🛠️ ULP & DUPLICATE REMOVER", callback_data="menu_ulp"),
+        types.InlineKeyboardButton("📢 CHANNEL", callback_data="menu_channel"),
+        types.InlineKeyboardButton("ℹ️ ABOUT", callback_data="menu_about")
     )
     return markup
 
+@bot.callback_query_handler(func=lambda call: call.data.startswith("menu_"))
+def menu_callback(call):
+    if call.data == "menu_codm":
+        show_files_inline(call.message.chat.id, "CODM")
+    elif call.data == "menu_ml":
+        show_files_inline(call.message.chat.id, "ML")
+    elif call.data == "menu_redeem":
+        bot.send_message(call.message.chat.id, "Enter your key.")
+    bot.answer_callback_query(call.id)
 def show_files_inline(chat_id, category):
     files = CATEGORIES.get(category, [])
     markup = types.InlineKeyboardMarkup()
