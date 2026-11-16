@@ -41,7 +41,6 @@ def generate_key():
     VALID_KEYS.add(new_key)
     return new_key
 
-# ITO YUNG GANYANG MENU SA SCREENSHOT MO - MALAKING BUTTONS SA BABA
 def main_menu():
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     markup.add(
@@ -63,12 +62,12 @@ def show_files_inline(chat_id, category):
     markup = types.InlineKeyboardMarkup()
     for title, filename in files:
         markup.add(types.InlineKeyboardButton(f"📄 {title}", callback_data=f"getfile:{filename}"))
-    bot.send_message(chat_id, f"📁 {category} Files - Pili ka:", reply_markup=markup)
+    bot.send_message(chat_id, f"📁 {category} Files - Choose one:", reply_markup=markup)
 
 if bot:
     @bot.message_handler(commands=['start'])
     def start(message):
-        bot.send_message(message.chat.id, "Welcome to YAGAMI BOT 🔥\n\nPindutin mo lang sa baba kung anong gusto mo.\n\nPara makapasok, pindutin 🔑 REDEEM KEY at ilagay mo key mo.", reply_markup=main_menu())
+        bot.send_message(message.chat.id, "Welcome to YAGAMI BOT 🔥\n\nJust tap a button below to continue.\n\nTo get access, tap 🔑 REDEEM KEY and enter your key.", reply_markup=main_menu())
 
     @bot.message_handler(commands=['genkey'])
     def genkey(message):
@@ -80,7 +79,6 @@ if bot:
 
     @bot.message_handler(content_types=['document'])
     def handle_doc(message):
-        # ULP & DUPLICATE REMOVER - lilinisin yung txt
         try:
             file_info = bot.get_file(message.document.file_id)
             downloaded = bot.download_file(file_info.file_path)
@@ -103,7 +101,7 @@ if bot:
                 bot.send_document(message.chat.id, f, caption=f"✅ Done!\nOriginal: {len(lines)} lines\nCleaned: {len(cleaned)} lines\nRemoved: {removed} duplicates")
             os.remove(out_path)
         except Exception as e:
-            bot.send_message(message.chat.id, f"Error: {e}\nSend lang ng .txt file.")
+            bot.send_message(message.chat.id, f"Error: {e}\nPlease send a .txt file.")
 
     @bot.callback_query_handler(func=lambda call: True)
     def callback(call):
@@ -122,7 +120,7 @@ if bot:
         user_id = message.from_user.id
 
         if text == "🔑 REDEEM KEY":
-            bot.send_message(message.chat.id, "🔒 Send mo key mo dito:")
+            bot.send_message(message.chat.id, "🔒 Please send your key here:")
             return
 
         if text == "🎮 CODM FILES":
@@ -134,11 +132,11 @@ if bot:
             return
 
         if text == "🛠️ ULP & DUPLICATE REMOVER":
-            bot.send_message(message.chat.id, "🛠️ Send mo dito yung .txt file mo na may duplicate.\nLilinisin ko at ibabalik ko sayo na malinis na, walang ulit.")
+            bot.send_message(message.chat.id, "🛠️ Send your .txt file with duplicates here.\nI will clean it and send it back with no duplicates.")
             return
 
         if text == "📢 CHANNEL":
-            bot.send_message(message.chat.id, "📢 Join ka sa channel namin:\nLagay mo dito channel link mo, boss. Halimbawa @yagami_channel")
+            bot.send_message(message.chat.id, "📢 Join our channel:\nPut your channel link here, boss. Example @yagami_channel")
             return
 
         if text == "ℹ️ ABOUT":
@@ -148,14 +146,13 @@ if bot:
         if text.startswith('/'):
             return
 
-        # KEY CHECK
         if text == MASTER_KEY:
             ADMIN_IDS.add(user_id)
             bot.reply_to(message, "✅ Key accepted! Welcome Admin!", reply_markup=main_menu())
         elif text in VALID_KEYS:
             bot.reply_to(message, "✅ Key accepted! Welcome!", reply_markup=main_menu())
         else:
-            bot.reply_to(message, "❌ Wrong key. Pindutin mo ulit 🔑 REDEEM KEY at try ulit.", reply_markup=main_menu())
+            bot.reply_to(message, "❌ Wrong key. Tap 🔑 REDEEM KEY again and try again.", reply_markup=main_menu())
 
     def run_bot():
         bot.infinity_polling()
@@ -164,3 +161,4 @@ if bot:
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+    
