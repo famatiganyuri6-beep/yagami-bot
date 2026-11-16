@@ -1,66 +1,63 @@
-import telebot
-from telebot import types
+import os
+import requests
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 
-# PALITAN MO TO NG TOKEN MO
-TOKEN = "9073043795:AAFD2xWxqzgi0v2FzJ4F78_tThRfljv8F3Y"
-bot = telebot.TeleBot(TOKEN)
+TOKEN = "ILAGAY_MO_DITO_YUNG_TOKEN_MO"
 
-# ========== START ==========
-@bot.message_handler(commands=['start'])
-def start(message):
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.add("YAGAMIHAXX TXT")
-    bot.send_message(message.chat.id, "Welcome sa YAGAMIHAXX TXT!\n\nPindutin mo yung button sa baba:", reply_markup=markup)
+BASE = "https://raw.githubusercontent.com/famatiganyuri6-beep/yagami-bot/main"
 
-# ========== YAGAMIHAXX TXT - ISANG PINDOT LANG ==========
-@bot.message_handler(func=lambda m: m.text == "YAGAMIHAXX TXT")
-def yagamihaxx_menu(message):
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.add("CODM 1909 V1", "CODM 1909 V2")
-    markup.add("CODM 1908 V1", "CODM 1908 MIX V1")
-    markup.add("CODM 1908 MIX", "CODM CLEAN")
-    markup.add("CODM 20261116")
-    markup.add("⬅️ BACK")
-    bot.send_message(message.chat.id, "Pili ka ng file na gusto mo:", reply_markup=markup)
+FILES = {
+    "codm_1909_v1": ("CODM 1909 V1", f"{BASE}/Codm_0725_1909.txt"),
+    "codm_1909_v2": ("CODM 1909 V2", f"{BASE}/Codm_0725_1909_1.txt"),
+    "codm_1908_v1": ("CODM 1908 V1", f"{BASE}/Codm_0725_1908_1.txt"),
+    "mix_1908_v1": ("MIX 1908 V1", f"{BASE}/Mix_Codm_0725_1908_1.txt"),
+    "mix_1908_v2": ("MIX 1908 V2", f"{BASE}/Mix_Codm_0725_1908.txt"),
+    "clean_1": ("CLEAN CODM 1", f"{BASE}/clean_codm_1.txt"),
+    "nov16": ("20261116", f"{BASE}/20261116_1.txt"),
+}
 
-# ========== BACK ==========
-@bot.message_handler(func=lambda m: m.text == "⬅️ BACK")
-def back(message):
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.add("YAGAMIHAXX TXT")
-    bot.send_message(message.chat.id, "Balik sa main menu:", reply_markup=markup)
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [[InlineKeyboardButton("YAGAMIHAXX TXT", callback_data="menu_txt")]]
+    await update.message.reply_text("Pili ka:", reply_markup=InlineKeyboardMarkup(keyboard))
 
-# ========== 7 FILES - PAG PININDOT, YUN LANG MA-SEND ==========
-# PALITAN MO YUNG USERNAME/REPO NG SAYO!
+async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
 
-@bot.message_handler(func=lambda m: m.text == "CODM 1909 V1")
-def send_1909_v1(message):
-    bot.send_document(message.chat.id, "https://raw.githubusercontent.com/USERNAME/REPO/main/files/Codm_0725_1909.txt", caption="YAGAMIHAXX TXT - CODM 1909 V1")
+    if data == "menu_txt":
+        keyboard = []
+        for key, (name, url) in FILES.items():
+            keyboard.append([InlineKeyboardButton(name, callback_data=key)])
+        keyboard.append([InlineKeyboardButton("⬅ BACK", callback_data="back")])
+        await query.edit_message_text("Pili ka ng file:", reply_markup=InlineKeyboardMarkup(keyboard))
+        return
 
-@bot.message_handler(func=lambda m: m.text == "CODM 1909 V2")
-def send_1909_v2(message):
-    bot.send_document(message.chat.id, "https://raw.githubusercontent.com/USERNAME/REPO/main/files/Codm_0725_1909_1.txt", caption="YAGAMIHAXX TXT - CODM 1909 V2")
+    if data == "back":
+        keyboard = [[InlineKeyboardButton("YAGAMIHAXX TXT", callback_data="menu_txt")]]
+        await query.edit_message_text("Pili ka:", reply_markup=InlineKeyboardMarkup(keyboard))
+        return
 
-@bot.message_handler(func=lambda m: m.text == "CODM 1908 V1")
-def send_1908_v1(message):
-    bot.send_document(message.chat.id, "https://raw.githubusercontent.com/USERNAME/REPO/main/files/Codm_0725_1908_1.txt", caption="YAGAMIHAXX TXT - CODM 1908 V1")
+    if data in FILES:
+        name, url = FILES[data]
+        await query.edit_message_text(f"Sin-send ko na {name}... wait lang!")
+        try:
+            r = requests.get(url, timeout=30)
+            if r.status_code == 200:
+                filename = url.split("/")[-1]
+                with open(filename, "wb") as f:
+                    f.write(r.content)
+                await context.bot.send_document(chat_id=query.message.chat_id, document=open(filename, "rb"), filename=filename, caption=f"✅ {name} - by YAGAMIHAXX")
+                os.remove(filename)
+            else:
+                await context.bot.send_message(chat_id=query.message.chat_id, text=f"Error: Hindi mahanap yung file {name}. Code {r.status_code}")
+        except Exception as e:
+            await context.bot.send_message(chat_id=query.message.chat_id, text=f"Error: {e}")
 
-@bot.message_handler(func=lambda m: m.text == "CODM 1908 MIX V1")
-def send_1908_mix_v1(message):
-    bot.send_document(message.chat.id, "https://raw.githubusercontent.com/USERNAME/REPO/main/files/Mix_Codm_0725_1908_1.txt", caption="YAGAMIHAXX TXT - CODM 1908 MIX V1")
-
-@bot.message_handler(func=lambda m: m.text == "CODM 1908 MIX")
-def send_1908_mix(message):
-    bot.send_document(message.chat.id, "https://raw.githubusercontent.com/USERNAME/REPO/main/files/Mix_Codm_0725_1908.txt", caption="YAGAMIHAXX TXT - CODM 1908 MIX")
-
-@bot.message_handler(func=lambda m: m.text == "CODM CLEAN")
-def send_clean(message):
-    bot.send_document(message.chat.id, "https://raw.githubusercontent.com/USERNAME/REPO/main/files/clean_codm_1.txt", caption="YAGAMIHAXX TXT - CODM CLEAN")
-
-@bot.message_handler(func=lambda m: m.text == "CODM 20261116")
-def send_2026(message):
-    bot.send_document(message.chat.id, "https://raw.githubusercontent.com/USERNAME/REPO/main/files/20261116_1.txt", caption="YAGAMIHAXX TXT - CODM 20261116")
-
-# ========== RUN ==========
-print("YAGAMIHAXX BOT RUNNING...")
-bot.polling(none_stop=True)
+if __name__ == "__main__":
+    app = ApplicationBuilder().token(TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(button))
+    print("Bot is running...")
+    app.run_polling()
