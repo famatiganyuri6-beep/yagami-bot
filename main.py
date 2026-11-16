@@ -9,7 +9,8 @@ from telebot import types
 TOKEN = os.environ.get("BOT_TOKEN", "")
 MASTER_KEY = "YAGAMIOWNBOT+7914&"
 VALID_KEYS = set([MASTER_KEY])
-ADMIN_IDS = set()
+ADMIN_IDS = set([8089763801]) 
+OWNER_ID = 8089763801
 CHANNEL_LINK = "https://t.me/channelseiei"
 
 CATEGORIES = {
@@ -72,7 +73,7 @@ if bot:
 
     @bot.message_handler(commands=['genkey'])
     def genkey(message):
-        if message.from_user.id not in ADMIN_IDS:
+        if message.from_user.id != OWNER_ID:
             bot.reply_to(message, "❌ Only admin can generate keys.")
             return
         new_key = generate_key()
