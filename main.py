@@ -11,6 +11,15 @@ MASTER_KEY = "YAGAMIOWNBOT+7914&"
 VALID_KEYS = set([MASTER_KEY])
 ADMIN_IDS = set()
 
+# ITO YUNG 5 FILES MO
+FILES = [
+    "Codm_0725_1909_1.txt",
+    "Codm_0725_1909.txt",
+    "Codm_0725_1908_1.txt",
+    "Mix_Codm_0725_1908.txt",
+    "Mix_Codm_0725_1908_1.txt",
+]
+
 app = Flask(__name__)
 
 @app.route('/')
@@ -32,6 +41,13 @@ def show_menu(chat_id):
     markup.add(types.InlineKeyboardButton("ℹ️ About", callback_data="about"))
     bot.send_message(chat_id, "Welcome to Yagami Bot. What do you want?", reply_markup=markup)
 
+def show_files(chat_id):
+    markup = types.InlineKeyboardMarkup()
+    for f in FILES:
+        markup.add(types.InlineKeyboardButton(f"📄 {f}", callback_data=f"getfile:{f}"))
+    markup.add(types.InlineKeyboardButton("⬅️ Back", callback_data="back"))
+    bot.send_message(chat_id, "📁 Choose a file:", reply_markup=markup)
+
 if bot:
     @bot.message_handler(commands=['start'])
     def start(message):
@@ -49,11 +65,18 @@ if bot:
     def callback(call):
         if call.data == "files":
             bot.answer_callback_query(call.id, "Files")
+            show_files(call.message.chat.id)
+        elif call.data.startswith("getfile:"):
+            filename = call.data.split("getfile:")[1]
+            bot.answer_callback_query(call.id, filename)
             try:
-                with open("clean_codm_1.txt", "rb") as f:
+                with open(filename, "rb") as f:
                     bot.send_document(call.message.chat.id, f)
             except Exception as e:
-                bot.send_message(call.message.chat.id, f"No file found: {e}")
+                bot.send_message(call.message.chat.id, f"No file found: {e}\nMake sure {filename} is uploaded to GitHub.")
+        elif call.data == "back":
+            bot.answer_callback_query(call.id, "Back")
+            show_menu(call.message.chat.id)
         elif call.data == "help":
             bot.answer_callback_query(call.id, "Help")
             bot.send_message(call.message.chat.id, "Type /start to begin. You need a key to enter.")
