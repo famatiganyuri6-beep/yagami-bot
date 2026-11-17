@@ -9,12 +9,10 @@ from threading import Thread
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
-# ============ CONFIG ============
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 OWNER_ID = 123456789
 DATA_FILE = "data.json"
 
-# ============ ADDED ONLY - OWNER LOCK ============
 try:
     OWNER_ID = int(os.environ.get("ADMIN_ID", str(OWNER_ID)))
 except:
@@ -25,15 +23,23 @@ def is_owner(user_id):
         return int(user_id) == int(OWNER_ID)
     except:
         return False
-# ============ END ADDED ============
 
-# ============ DATA ============
 def load_data():
     if not os.path.exists(DATA_FILE):
         return {"keys": {}, "users": {}, "stock_files": {"ML": [], "CODM": []}}
     try:
         with open(DATA_FILE, "r") as f:
-            return json.load(f)
+            d = json.load(f)
+            # FIX OLD DATA - kung string lang yung dati, gawing dict
+            for g in ["ML", "CODM"]:
+                new_list = []
+                for x in d.get("stock_files", {}).get(g, []):
+                    if isinstance(x, str):
+                        new_list.append({"name": x, "file_id": None})
+                    else:
+                        new_list.append(x)
+                d["stock_files"][g] = new_list
+            return d
     except:
         return {"keys": {}, "users": {}, "stock_files": {"ML": [], "CODM": []}}
 
@@ -95,21 +101,37 @@ def get_menu(user_id=None):
 def back_menu():
     return InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ BACK", callback_data="back")]])
 
-# ============ START ============
+def redeem_only_menu():
+    return InlineKeyboardMarkup([[InlineKeyboardButton("🎁 REDEEM KEY", callback_data="redeem")]])
+
+# ============ START - BAGO: PAG BUYER AT WALANG KEY, REDEEM LANG ============
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     _uid = None
     if update.message:
         _uid = update.message.from_user.id
     elif update.callback_query:
         _uid = update.callback_query.from_user.id
-    _menu = get_menu(_uid)
-    text = "👋 **WELCOME TO YAGAMI BOT**\n\nChoose:\n• Generate Key\n• Redeem Key\n• ML / CODM TXT\n• Upload Files\n\nBot is Online ✅"
-    if _uid is not None and not is_owner(_uid):
+
+    # OWNER - full menu
+    if _uid is not None and is_owner(_uid):
+        text = "👋 **WELCOME TO YAGAMI BOT**\n\nChoose:\n• Generate Key\n• Redeem Key\n• ML / CODM TXT\n• Upload Files\n\nBot is Online ✅"
+        _menu = main_menu(_uid)
+    # BUYER NA WALANG KEY PA - REDEEM LANG
+    elif _uid is not None and not is_authorized(_uid):
+        text = "👋 **HI, WELCOME TO YAGAMI BOT**\n\nEnter your key here to redeem.\n\nPress REDEEM KEY below 👇"
+        _menu = redeem_only_menu()
+    # BUYER NA MAY KEY NA - user menu
+    else:
         text = "👋 **WELCOME TO YAGAMI BOT**\n\nChoose:\n• Redeem Key\n• ML / CODM TXT\n• My Status\n\nBot is Online ✅"
+        _menu = user_menu()
+
     if update.message:
         await update.message.reply_text(text, reply_markup=_menu, parse_mode="Markdown")
     elif update.callback_query:
-        await update.callback_query.edit_message_text(text, reply_markup=_menu, parse_mode="Markdown")
+        try:
+            await update.callback_query.edit_message_text(text, reply_markup=_menu, parse_mode="Markdown")
+        except:
+            await update.callback_query.message.reply_text(text, reply_markup=_menu, parse_mode="Markdown")
 
 # ============ BUTTONS ============
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -117,7 +139,13 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     data = query.data
     user_id = query.from_user.id
+
     if data == "back":
+        await start(update, context)
+        return
+    if data == "done_upload":
+        if user_id in waiting_upload:
+            del waiting_upload[user_id]
         await start(update, context)
         return
     if data == "status":
@@ -129,39 +157,60 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not is_owner(user_id):
             await query.edit_message_text("❌ Only Yagami Owner can view stats.", reply_markup=back_menu())
             return
-        if not is_authorized(user_id):
-            await query.edit_message_text("❌ You are not authorized. Redeem a key first.", reply_markup=back_menu())
-            return
         total_keys = len(keys_db)
         total_users = len(users_db)
         ml_count = len(stock_files.get("ML", []))
         codm_count = len(stock_files.get("CODM", []))
         await query.edit_message_text(f"📊 **STATS**\n\nTotal Keys: {total_keys}\nTotal Users: {total_users}\nML Files: {ml_count}\nCODM Files: {codm_count}", reply_markup=back_menu(), parse_mode="Markdown")
         return
+
+    # === BAGO: ML / CODM LIST - CLICKABLE NA ===
     if data in ["ml_txt", "codm_txt"]:
         if not is_authorized(user_id):
-            await query.edit_message_text("❌ You are not authorized. Redeem a key first to view TXT.", reply_markup=back_menu())
+            await query.edit_message_text("👋 **HI, WELCOME TO YAGAMI BOT**\n\nEnter your key here to redeem.", reply_markup=redeem_only_menu(), parse_mode="Markdown")
             return
         game = "ML" if data == "ml_txt" else "CODM"
         files = stock_files.get(game, [])
         if not files:
             await query.edit_message_text(f"📄 **{game} TXT**\n\nNo file uploaded yet.", reply_markup=back_menu(), parse_mode="Markdown")
             return
-        txt = f"📄 **{game} TXT FILES**\n\n"
-        for f in files:
-            txt += f"• {f}\n"
-        await query.edit_message_text(txt, reply_markup=back_menu(), parse_mode="Markdown")
+        # Gumawa ng button per file
+        kb = []
+        for idx, f in enumerate(files):
+            name = f.get("name", "File") if isinstance(f, dict) else str(f)
+            kb.append([InlineKeyboardButton(f"📄 {name}", callback_data=f"dl_{game}_{idx}")])
+        kb.append([InlineKeyboardButton("⬅️ BACK", callback_data="back")])
+        await query.edit_message_text(f"📄 **CHOOSE {game} FILE:**\n\nPindutin mo yung gusto mo i-download 👇", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
         return
+
+    # === BAGO: DOWNLOAD FILE ===
+    if data.startswith("dl_"):
+        if not is_authorized(user_id):
+            await query.edit_message_text("❌ You are not authorized. Redeem a key first.", reply_markup=back_menu())
+            return
+        try:
+            _, game, idx = data.split("_")
+            idx = int(idx)
+            f = stock_files.get(game, [])[idx]
+            file_id = f.get("file_id") if isinstance(f, dict) else None
+            name = f.get("name", "File") if isinstance(f, dict) else str(f)
+            if not file_id:
+                await query.edit_message_text(f"❌ Old file ito, i-upload ulit ni Owner: {name}\n\nPa-upload ulit kay Owner.", reply_markup=back_menu())
+                return
+            await query.message.reply_document(document=file_id, filename=name, caption=f"📄 Here is your file: {name}")
+            await query.answer("Sending file...")
+        except Exception as e:
+            await query.edit_message_text(f"❌ Error sending file: {e}", reply_markup=back_menu())
+        return
+
     if data in ["upload_ml", "upload_codm"]:
         if not is_owner(user_id):
             await query.edit_message_text("❌ Only Yagami Owner can upload files.", reply_markup=back_menu())
             return
-        if user_id != OWNER_ID:
-            await query.edit_message_text("❌ Only Yagami Owner can upload files.", reply_markup=back_menu())
-            return
         game = "ML" if data == "upload_ml" else "CODM"
         waiting_upload[user_id] = game
-        await query.edit_message_text(f"📤 **UPLOAD {game}**\n\nSend your file now.", reply_markup=back_menu(), parse_mode="Markdown")
+        kb = [[InlineKeyboardButton("✅ DONE UPLOAD", callback_data="done_upload")], [InlineKeyboardButton("⬅️ BACK", callback_data="back")]]
+        await query.edit_message_text(f"📤 **UPLOAD {game}**\n\nSend mo na yung 6 files mo, sunod-sunod lang.\nPag tapos ka na, pindutin mo DONE UPLOAD.", reply_markup=InlineKeyboardMarkup(kb), parse_mode="Markdown")
         return
     if data == "redeem":
         waiting_redeem.add(user_id)
@@ -196,7 +245,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 expire = str(datetime.now() + timedelta(days=days))
             users_db[str(user_id)] = {"expire": expire, "key": key}
             save_data()
-            await msg.reply_text(f"✅ **REDEEM SUCCESS!**\n\nYou are VIP until: {expire}", reply_markup=_menu_to_return, parse_mode="Markdown")
+            await msg.reply_text(f"✅ **REDEEM SUCCESS!**\n\nYou are VIP until: {expire}\n\nNgayon pwede ka na pumili ng ML / CODM TXT 👇", reply_markup=_menu_to_return, parse_mode="Markdown")
         else:
             await msg.reply_text("❌ Invalid or already used KEY.", reply_markup=back_menu())
         waiting_redeem.discard(user_id)
@@ -208,19 +257,21 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         if msg.document:
             fname = msg.document.file_name
+            fid = msg.document.file_id
             game = waiting_upload[user_id]
             if game not in stock_files:
                 stock_files[game] = []
-            stock_files[game].append(fname)
+            stock_files[game].append({"name": fname, "file_id": fid})
             save_data()
-            await msg.reply_text(f"✅ Uploaded to {game}: {fname}", reply_markup=_menu_to_return)
+            count = len(stock_files[game])
+            kb = [[InlineKeyboardButton("✅ DONE UPLOAD", callback_data="done_upload")]]
+            await msg.reply_text(f"✅ Uploaded ({count}) to {game}: {fname}\n\nSend pa ulit ng next file, or pindutin DONE pag tapos na.", reply_markup=InlineKeyboardMarkup(kb))
         else:
             await msg.reply_text("❌ Please send a file.", reply_markup=back_menu())
-        del waiting_upload[user_id]
+        # HINDI NA NATIN BUBURAHIN yung waiting_upload para tuloy-tuloy yung 6 files
         return
     await msg.reply_text("Use the menu below 👇", reply_markup=_menu_to_return)
 
-# ============ MAIN BOT ============
 def main():
     if not BOT_TOKEN:
         print("ERROR: No BOT_TOKEN in Render!")
@@ -232,7 +283,6 @@ def main():
     print("YAGAMI Bot is running...")
     app.run_polling()
 
-# ============ KEEP ALIVE FOR RENDER - ITO LANG YUNG INAYOS KO ============
 web_app = Flask('')
 @web_app.route('/')
 def home():
@@ -248,8 +298,6 @@ def keep_alive():
     t.start()
 
 if __name__ == "__main__":
-    # FIX FOR RuntimeError: There is no current event loop in thread 'MainThread'
-    # Kailangan gumawa ng bagong loop bago patakbuhin si Flask at Telegram ng sabay
     try:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
