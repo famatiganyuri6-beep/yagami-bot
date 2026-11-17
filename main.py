@@ -2,6 +2,7 @@ import os
 import json
 import random
 import string
+import asyncio
 from datetime import datetime, timedelta
 from flask import Flask
 from threading import Thread
@@ -78,7 +79,6 @@ def main_menu(user_id=None):
     ]
     return InlineKeyboardMarkup(keyboard)
 
-# ============ ADDED ONLY - USER MENU ============
 def user_menu():
     keyboard = [
         [InlineKeyboardButton("🎁 REDEEM KEY", callback_data="redeem")],
@@ -91,12 +91,11 @@ def get_menu(user_id=None):
     if user_id is not None and is_owner(user_id):
         return main_menu(user_id)
     return user_menu()
-# ============ END ADDED ============
 
 def back_menu():
     return InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ BACK", callback_data="back")]])
 
-# ============ START - ITO LANG YUNG PINALITAN KO ============
+# ============ START ============
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     _uid = None
     if update.message:
@@ -111,7 +110,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(text, reply_markup=_menu, parse_mode="Markdown")
     elif update.callback_query:
         await update.callback_query.edit_message_text(text, reply_markup=_menu, parse_mode="Markdown")
-# ============ END START ============
 
 # ============ BUTTONS ============
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -234,7 +232,7 @@ def main():
     print("YAGAMI Bot is running...")
     app.run_polling()
 
-# ============ KEEP ALIVE FOR RENDER ============
+# ============ KEEP ALIVE FOR RENDER - ITO LANG YUNG INAYOS KO ============
 web_app = Flask('')
 @web_app.route('/')
 def home():
@@ -246,8 +244,16 @@ def run_web():
 
 def keep_alive():
     t = Thread(target=run_web)
+    t.daemon = True
     t.start()
 
 if __name__ == "__main__":
+    # FIX FOR RuntimeError: There is no current event loop in thread 'MainThread'
+    # Kailangan gumawa ng bagong loop bago patakbuhin si Flask at Telegram ng sabay
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    except Exception:
+        pass
     keep_alive()
     main()
