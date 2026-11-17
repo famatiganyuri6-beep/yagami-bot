@@ -1,4 +1,3 @@
-import asyncio
 import random
 import string
 import os
@@ -57,15 +56,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     data = query.data
     if data == "codm":
-        if user_id not in authorized:
-            await query.edit_message_text("Enter YAGAMI Bot Key first!")
-            return
-        await query.edit_message_text("📄 CODM TXT\n\nSend your CODM file / details here. Generating soon...", reply_markup=get_panel(user_id))
+        await query.edit_message_text("📄 CODM TXT\n\nSend your CODM file / details here.", reply_markup=get_panel(user_id))
     elif data == "ml":
-        if user_id not in authorized:
-            await query.edit_message_text("Enter YAGAMI Bot Key first!")
-            return
-        await query.edit_message_text("📄 ML TXT\n\nSend your ML file / details here. Generating soon...", reply_markup=get_panel(user_id))
+        await query.edit_message_text("📄 ML TXT\n\nSend your ML file / details here.", reply_markup=get_panel(user_id))
     elif data == "redeem":
         await query.edit_message_text("Enter YAGAMI Bot Key:")
     elif data == "stats":
@@ -76,8 +69,26 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         key = make_key()
         keys[key] = None
-        await query.edit_message_text(f"New Key Generated:\n{key}\n\nSend this to buyer.", parse_mode="Markdown", reply_markup=get_panel(user_id))
+        await query.edit_message_text(f"New Key Generated:\n`{key}`", parse_mode="Markdown", reply_markup=get_panel(user_id))
     elif data == "ulp":
         await query.edit_message_text("🛠 ULP & DUPLICATE REMOVER\n\nSend your file to clean.", reply_markup=get_panel(user_id))
     elif data == "datadome":
         await query.edit_message_text("🛡 DATADOME GENERATOR\n\nComing soon.", reply_markup=get_panel(user_id))
+
+web = Flask(__name__)
+@web.route('/')
+def home():
+    return "Yagami Bot is alive!"
+
+def run_web():
+    port = int(os.environ.get("PORT", 10000))
+    web.run(host="0.0.0.0", port=port)
+
+if __name__ == "__main__":
+    threading.Thread(target=run_web, daemon=True).start()
+    print("Starting Yagami Bot...")
+    app = Application.builder().token(TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    app.run_polling()
