@@ -20,12 +20,11 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "help":
         await query.edit_message_text("Just send /start to see the menu again.")
 
-def main():
+  def main():
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button))
     print("Bot is running...")
     app.run_polling()
 
-if name == "main":
-    main()
+main()
