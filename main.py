@@ -7,8 +7,8 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Mess
 TOKEN = os.getenv("BOT_TOKEN")
 OWNER_ID = 8089763801
 
-# STOCK - Dito naka-save yung FILES mo, 1 file lang per button
-stock_files = {"ML": None, "CODM": None}
+# STOCK - LIST, CAN HOLD MULTIPLE FILES FOR BOTH ML AND CODM
+stock_files = {"ML": [], "CODM": []}
 waiting_upload = {}
 keys = {}
 user_keys = {}
@@ -22,6 +22,8 @@ def main_menu(user_id):
         buttons.append([InlineKeyboardButton("🛠 GENERATE KEY", callback_data="generate")])
         buttons.append([InlineKeyboardButton("📤 UPLOAD ML TXT", callback_data="upload_ml")])
         buttons.append([InlineKeyboardButton("📤 UPLOAD CODM TXT", callback_data="upload_codm")])
+        buttons.append([InlineKeyboardButton("🗑 CLEAR ML STOCK", callback_data="clear_ml")])
+        buttons.append([InlineKeyboardButton("🗑 CLEAR CODM STOCK", callback_data="clear_codm")])
         buttons.append([InlineKeyboardButton("🛠 ULP & DUPLICATE REMOVER", callback_data="ulp")])
         buttons.append([InlineKeyboardButton("🛡 DATADOME GENERATOR", callback_data="datadome")])
     return InlineKeyboardMarkup(buttons)
@@ -36,24 +38,35 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     data = query.data
 
-    # --- BUYER PININDOT ML / CODM -> LABAS YUNG FILE ---
+    # --- BUYER CLICKS ML / CODM -> SEND ALL FILES IN LIST ---
     if data in ["ml_txt", "codm_txt"]:
         key = "ML" if data == "ml_txt" else "CODM"
-        file_id = stock_files.get(key)
-        if not file_id:
-            await query.edit_message_text(f"❌ Wala pang laman yung {key} TXT. Wait mo si Boss mag-upload.")
+        files = stock_files.get(key, [])
+        if not files:
+            await query.edit_message_text(f"❌ No stock yet for {key} TXT. Please wait for Boss to upload.")
             return
-        await context.bot.send_document(chat_id=query.message.chat_id, document=file_id, caption=f"📄 Ito na yung {key} TXT mo!")
+        await query.edit_message_text(f"📄 Sending {len(files)} file(s) of {key}...")
+        for file_id in files:
+            await context.bot.send_document(chat_id=query.message.chat_id, document=file_id, caption=f"📄 {key} TXT")
         return
 
-    # --- OWNER PININDOT UPLOAD ---
+    # --- OWNER UPLOAD ---
     if data in ["upload_ml", "upload_codm"]:
         if user_id != OWNER_ID:
             await query.answer("Admin only!", show_alert=True)
             return
         key = "ML" if data == "upload_ml" else "CODM"
         waiting_upload[user_id] = key
-        await query.edit_message_text(f"📤 Send mo na yung {key} .txt FILE mo dito. Pag nag-send ka ng bago, mapapalitan yung luma.")
+        await query.edit_message_text(f"📤 Send your {key} .txt FILES here. You can send multiple files, they will be added to the list. To delete all, use CLEAR.")
+        return
+
+    # --- OWNER CLEAR ---
+    if data in ["clear_ml", "clear_codm"]:
+        if user_id != OWNER_ID:
+            return
+        key = "ML" if data == "clear_ml" else "CODM"
+        stock_files[key] = []
+        await query.edit_message_text(f"🗑 {key} stock cleared. No files left. Upload again.")
         return
 
     if data == "generate":
@@ -61,37 +74,39 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         new_key = "YAGAMI-" + ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
         keys[new_key] = True
-        await query.edit_message_text(f"✅ New Key mo boss:\n`{new_key}`", parse_mode="Markdown")
+        await query.edit_message_text(f"✅ Your New Key:\n`{new_key}`", parse_mode="Markdown")
         return
 
     if data == "redeem":
-        await query.edit_message_text("🔑 Send mo yung KEY mo dito.")
+        await query.edit_message_text("🔑 Send your KEY here.")
         context.user_data["waiting_key"] = True
         return
 
     if data == "stats":
-        await query.edit_message_text("📊 MY STATISTICS\nWala pang data.")
+        await query.edit_message_text("📊 MY STATISTICS\nNo data yet.")
         return
 
     if data == "ulp":
-        await query.edit_message_text("🧹 ULP & DUPLICATE REMOVER\nSend mo yung .txt file mo dito.")
+        await query.edit_message_text("🧹 ULP & DUPLICATE REMOVER\nSend your .txt file here.")
         return
 
     if data == "datadome":
-        await query.edit_message_text("🛡 DATADOME GENERATOR\nSoon boss!")
+        await query.edit_message_text("🛡 DATADOME GENERATOR\nComing soon Boss!")
         return
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
 
-    # 1. KUNG NAG-A-UPLOAD SI OWNER NG FILE
+    # 1. OWNER UPLOAD - APPEND TO LIST, DO NOT REPLACE OLD FILES
     if user_id in waiting_upload and update.message.document:
-        key = waiting_upload.pop(user_id)
-        stock_files[key] = update.message.document.file_id
-        await update.message.reply_text(f"✅ NA-SAVE NA! Pag may nag-click ng {key} TXT, ito na yung FILE na lalabas.")
+        key = waiting_upload[user_id]
+        # Keep waiting_upload active so owner can send multiple files in a row
+        stock_files[key].append(update.message.document.file_id)
+        total = len(stock_files[key])
+        await update.message.reply_text(f"✅ SAVED! Now you have {total} file(s) in {key}. Send another one, it will be added.")
         return
 
-    # 2. KUNG NAGRE-REDEEM SI BUYER
+    # 2. REDEEM KEY
     if context.user_data.get("waiting_key") and update.message.text:
         key = update.message.text.strip()
         if key in keys:
