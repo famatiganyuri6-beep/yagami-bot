@@ -35,7 +35,7 @@ async def main():
     await app.updater.start_polling()
     await asyncio.Event().wait()
 
-web = Flask(name)
+web = Flask(__name__)
 @web.route('/')
 def home():
     return "Yagami Bot is alive!"
