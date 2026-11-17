@@ -11,7 +11,12 @@ OWNER_ID = 8089763801
 stock_files = {"ML": [], "CODM": []}
 waiting_upload = {}
 keys = {}
-user_keys = {}
+authorized_users = set()
+
+def locked_menu():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔑 REDEEM KEY", callback_data="redeem")]
+    ])
 
 def main_menu(user_id):
     buttons = [
@@ -28,15 +33,35 @@ def main_menu(user_id):
         buttons.append([InlineKeyboardButton("🛡 DATADOME GENERATOR", callback_data="datadome")])
     return InlineKeyboardMarkup(buttons)
 
+def is_authorized(user_id):
+    return user_id == OWNER_ID or user_id in authorized_users
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    await update.message.reply_text("👋 Welcome to YAGAMI Bot! Choose below:", reply_markup=main_menu(user_id))
+    if is_authorized(user_id):
+        await update.message.reply_text("👋 Welcome to YAGAMI Bot! Choose below:", reply_markup=main_menu(user_id))
+    else:
+        await update.message.reply_text("🔒 LOCKED!\n\nThis bot is locked. You need an Entrance Key to access the panel.\n\nClick REDEEM KEY and send your key.", reply_markup=locked_menu())
 
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception:
+        pass
     user_id = query.from_user.id
     data = query.data
+
+    # --- REDEEM IS ALLOWED EVEN IF LOCKED ---
+    if data == "redeem":
+        await query.edit_message_text("🔑 Send your ENTRANCE KEY here.")
+        context.user_data["waiting_key"] = True
+        return
+
+    # --- BLOCK ALL OTHER BUTTONS IF NOT AUTHORIZED ---
+    if not is_authorized(user_id):
+        await query.edit_message_text("🔒 LOCKED!\n\nYou need an Entrance Key first. Click REDEEM KEY.", reply_markup=locked_menu())
+        return
 
     # --- BUYER CLICKS ML / CODM -> SEND ALL FILES IN LIST ---
     if data in ["ml_txt", "codm_txt"]:
@@ -74,12 +99,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         new_key = "YAGAMI-" + ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
         keys[new_key] = True
-        await query.edit_message_text(f"✅ Your New Key:\n`{new_key}`", parse_mode="Markdown")
-        return
-
-    if data == "redeem":
-        await query.edit_message_text("🔑 Send your KEY here.")
-        context.user_data["waiting_key"] = True
+        await query.edit_message_text(f"✅ Your New Entrance Key:\n`{new_key}`\n\nGive this to your buyer. They must redeem it to unlock the panel.", parse_mode="Markdown")
         return
 
     if data == "stats":
@@ -100,22 +120,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 1. OWNER UPLOAD - APPEND TO LIST, DO NOT REPLACE OLD FILES
     if user_id in waiting_upload and update.message.document:
         key = waiting_upload[user_id]
-        # Keep waiting_upload active so owner can send multiple files in a row
         stock_files[key].append(update.message.document.file_id)
         total = len(stock_files[key])
         await update.message.reply_text(f"✅ SAVED! Now you have {total} file(s) in {key}. Send another one, it will be added.")
         return
 
-    # 2. REDEEM KEY
+    # 2. REDEEM ENTRANCE KEY
     if context.user_data.get("waiting_key") and update.message.text:
         key = update.message.text.strip()
         if key in keys:
             del keys[key]
-            user_keys[user_id] = key
+            authorized_users.add(user_id)
             context.user_data["waiting_key"] = False
-            await update.message.reply_text("✅ KEY ACCEPTED!", reply_markup=main_menu(user_id))
+            await update.message.reply_text("✅ KEY ACCEPTED! Panel unlocked!", reply_markup=main_menu(user_id))
         else:
-            await update.message.reply_text("❌ Invalid Key.")
+            await update.message.reply_text("❌ Invalid Key. Try again or contact Boss.")
         return
 
 def main():
