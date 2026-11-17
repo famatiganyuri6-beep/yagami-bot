@@ -4,8 +4,8 @@ import string
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
-TOKEN = "LAGAY_MO_TOKEN_MO_DITO"
-OWNER_ID = 123456789
+TOKEN = "9073043795:AAHHIqIxc8h7yTE3fACKLO1kSpU6lsfC_NM"
+OWNER_ID = 8089763801
 keys = {}
 
 def make_key():
@@ -31,7 +31,7 @@ async def genkey(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     new_key = make_key()
     keys[new_key] = True
-    await update.message.reply_text(f"✅ New key created:\n`{new_key}`", parse_mode="Markdown")
+    await update.message.reply_text(f"✅ New key created:\n{new_key}", parse_mode="Markdown")
 
 async def mykeys(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != OWNER_ID:
@@ -54,5 +54,5 @@ async def main():
     await app.updater.start_polling()
     await asyncio.Event().wait()
 
-if __name__ == "__main__":
+if name == "main":
     asyncio.run(main())
