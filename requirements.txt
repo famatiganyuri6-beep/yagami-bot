@@ -1,2 +1,2 @@
-Flask
-python-telegram-bot
+python-telegram-bot==22.8
+requests==2.32.3
