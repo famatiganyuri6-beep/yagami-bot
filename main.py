@@ -1,10 +1,11 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+import asyncio
 import random
 import string
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
-TOKEN = "9073043795:AAHHIqIxc8h7yTE3fACKLO1kSpU6lsfC_NM"
-OWNER_ID = 8089763801
+TOKEN = "LAGAY_MO_TOKEN_MO_DITO"
+OWNER_ID = 123456789
 keys = {}
 
 def make_key():
@@ -25,32 +26,33 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Just send /start to see the menu again.")
 
 async def genkey(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id != OWNER_ID:
+    if update.effective_user.id != OWNER_ID:
         await update.message.reply_text("❌ Ikaw lang ang owner ang pwede gumawa ng key. Hindi ka allowed.")
         return
     new_key = make_key()
     keys[new_key] = True
-    await update.message.reply_text(f"✅ New key created:\n`{new_key}`\n\nIkaw lang nakagawa nito.", parse_mode="Markdown")
+    await update.message.reply_text(f"✅ New key created:\n`{new_key}`", parse_mode="Markdown")
 
 async def mykeys(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id != OWNER_ID:
+    if update.effective_user.id != OWNER_ID:
         await update.message.reply_text("❌ Owner lang pwede makita ng keys.")
         return
     if not keys:
         await update.message.reply_text("Wala ka pang nagagawang key.")
         return
-    text = "🔑 Mga keys mo:\n\n" + "\n".join(keys.keys())
-    await update.message.reply_text(text)
+    await update.message.reply_text("🔑 Mga keys mo:\n\n" + "\n".join(keys.keys()))
 
-def main():
+async def main():
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("genkey", genkey))
     app.add_handler(CommandHandler("mykeys", mykeys))
     app.add_handler(CallbackQueryHandler(button))
     print("Bot is running...")
-    app.run_polling()
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling()
+    await asyncio.Event().wait()
 
-main()
+if __name__ == "__main__":
+    asyncio.run(main())
