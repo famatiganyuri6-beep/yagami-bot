@@ -6,7 +6,7 @@ from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 
-TOKEN = "9073043795:AAED3C1-agE_PHcqHUxtzl3ThHZQCvEZZTY"
+TOKEN = "9073043795:AAFyeqMESlSOHJuUOcHr1o_NbyZhLfXqC08"
 OWNER_ID = 8089763801
 keys = {}
 authorized = set()
