@@ -53,5 +53,4 @@ async def main():
     await app.start()
     await app.updater.start_polling()
     await asyncio.Event().wait()
-
- asyncio.run(main())
+    asyncio.run(main())
