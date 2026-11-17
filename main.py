@@ -1,8 +1,12 @@
-import asyncio
-import random
-import string
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+  import asyncio
+  import random
+  import string
+  import os
+  import threading
+  from flask import Flask
+  from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+  from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+
 
 TOKEN = "9073043795:AAHHIqIxc8h7yTE3fACKLO1kSpU6lsfC_NM"
 OWNER_ID = 8089763801
@@ -53,4 +57,16 @@ async def main():
     await app.start()
     await app.updater.start_polling()
     await asyncio.Event().wait()
+    # Fake website para hindi patayin ni Render
+web = Flask(__name__)
+@web.route('/')
+def home():
+    return "Yagami Bot is alive!"
+
+def run_web():
+    port = int(os.environ.get("PORT", 10000))
+    web.run(host="0.0.0.0", port=port)
+
+threading.Thread(target=run_web, daemon=True).start()
+
     asyncio.run(main())
