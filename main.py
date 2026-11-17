@@ -2,16 +2,16 @@ import os
 import json
 import random
 import string
+import asyncio
 from datetime import datetime, timedelta
 from flask import Flask
 from threading import Thread
-
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
 # ============ CONFIG ============
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
-OWNER_ID = 123456789  # PALITAN MO NG TELEGRAM ID MO
+OWNER_ID = 123456789 # PALITAN MO NG TELEGRAM ID MO
 DATA_FILE = "data.json"
 
 # ============ DATA ============
@@ -32,7 +32,6 @@ DATA = load_data()
 keys_db = DATA["keys"]
 users_db = DATA["users"]
 stock_files = DATA["stock_files"]
-
 waiting_redeem = set()
 waiting_upload = {}
 
@@ -92,17 +91,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     data = query.data
     user_id = query.from_user.id
-
     if data == "back":
         await start(update, context)
         return
-
     if data == "status":
         u = users_db.get(str(user_id), {})
         exp = u.get("expire", "Wala ka pang VIP")
         await query.edit_message_text(f"👤 **MY STATUS**\n\nExpire: {exp}\nAuthorized: {'YES ✅' if is_authorized(user_id) else 'NO ❌'}", reply_markup=back_menu(), parse_mode="Markdown")
         return
-
     if data == "stats":
         if not is_authorized(user_id):
             await query.edit_message_text("❌ Hindi ka authorized. Mag-redeem ka muna ng key.", reply_markup=back_menu())
@@ -113,7 +109,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         codm_count = len(stock_files.get("CODM", []))
         await query.edit_message_text(f"📊 **STATS**\n\nTotal Keys: {total_keys}\nTotal Users: {total_users}\nML Files: {ml_count}\nCODM Files: {codm_count}", reply_markup=back_menu(), parse_mode="Markdown")
         return
-
     if data in ["ml_txt", "codm_txt"]:
         if not is_authorized(user_id):
             await query.edit_message_text("❌ Hindi ka authorized. Mag-redeem ka muna ng key para ma-view yung TXT.", reply_markup=back_menu())
@@ -128,7 +123,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             txt += f"• {f}\n"
         await query.edit_message_text(txt, reply_markup=back_menu(), parse_mode="Markdown")
         return
-
     if data in ["upload_ml", "upload_codm"]:
         if user_id != OWNER_ID:
             await query.edit_message_text("❌ Owner lang pwede mag-upload.", reply_markup=back_menu())
@@ -137,12 +131,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         waiting_upload[user_id] = game
         await query.edit_message_text(f"📤 **UPLOAD {game}**\n\nI-send mo ngayon yung file mo.", reply_markup=back_menu(), parse_mode="Markdown")
         return
-
     if data == "redeem":
         waiting_redeem.add(user_id)
         await query.edit_message_text("🎁 **REDEEM KEY**\n\nI-send mo yung KEY mo.\nExample: `YAGAMI-XXXX...`", reply_markup=back_menu(), parse_mode="Markdown")
         return
-
     if data.startswith("gen_"):
         days_map = {"gen_10": 10, "gen_20": 20, "gen_50": 50, "gen_lifetime": 9999}
         days = days_map.get(data, 10)
@@ -157,7 +149,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     msg = update.message
-
     if user_id in waiting_redeem:
         key = (msg.text or "").strip().upper()
         if key in keys_db and not keys_db[key]["used"]:
@@ -174,7 +165,6 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await msg.reply_text("❌ Invalid o nagamit na yung KEY.", reply_markup=back_menu())
         waiting_redeem.discard(user_id)
         return
-
     if user_id in waiting_upload:
         if msg.document:
             fname = msg.document.file_name
@@ -188,14 +178,16 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await msg.reply_text("❌ Mag-send ka ng file.", reply_markup=back_menu())
         del waiting_upload[user_id]
         return
-
     await msg.reply_text("Gamitin mo yung menu 👇", reply_markup=main_menu())
 
-# ============ MAIN BOT ============
+# ============ MAIN BOT - FIXED ============
 def main():
     if not BOT_TOKEN:
         print("ERROR: Walang BOT_TOKEN sa Render!")
         return
+    # FIX: Gumawa ng bagong event loop para hindi mag-crash sa MainThread
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button_handler))
@@ -205,7 +197,6 @@ def main():
 
 # ============ PANG-ALIS HARANG SA RENDER ============
 web_app = Flask('')
-
 @web_app.route('/')
 def home():
     return "YAGAMI Bot is Alive!"
@@ -215,7 +206,7 @@ def run_web():
     web_app.run(host='0.0.0.0', port=port)
 
 def keep_alive():
-    t = Thread(target=run_web)
+    t = Thread(target=run_web, daemon=True)
     t.start()
 
 if __name__ == "__main__":
