@@ -1,11 +1,31 @@
 import os
 import random
 import string
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
 TOKEN = os.getenv("BOT_TOKEN")
 OWNER_ID = 8089763801
+
+# --- FAKE WEB SERVER TO FIX RENDER RED ERROR (FREE) ---
+# Render looks for an open port. This dummy server opens one so Render stops complaining.
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"YAGAMI Bot is running!")
+    def log_message(self, format, *args):
+        pass
+
+def run_web_server():
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", port), Handler)
+    server.serve_forever()
+
+threading.Thread(target=run_web_server, daemon=True).start()
+# --- END FAKE WEB SERVER ---
 
 # STOCK - LIST, CAN HOLD MULTIPLE FILES FOR BOTH ML AND CODM
 stock_files = {"ML": [], "CODM": []}
@@ -52,18 +72,15 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
     data = query.data
 
-    # --- REDEEM IS ALLOWED EVEN IF LOCKED ---
     if data == "redeem":
         await query.edit_message_text("🔑 Send your ENTRANCE KEY here.")
         context.user_data["waiting_key"] = True
         return
 
-    # --- BLOCK ALL OTHER BUTTONS IF NOT AUTHORIZED ---
     if not is_authorized(user_id):
         await query.edit_message_text("🔒 LOCKED!\n\nYou need an Entrance Key first. Click REDEEM KEY.", reply_markup=locked_menu())
         return
 
-    # --- BUYER CLICKS ML / CODM -> SEND ALL FILES IN LIST ---
     if data in ["ml_txt", "codm_txt"]:
         key = "ML" if data == "ml_txt" else "CODM"
         files = stock_files.get(key, [])
@@ -75,7 +92,6 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_document(chat_id=query.message.chat_id, document=file_id, caption=f"📄 {key} TXT")
         return
 
-    # --- OWNER UPLOAD ---
     if data in ["upload_ml", "upload_codm"]:
         if user_id != OWNER_ID:
             await query.answer("Admin only!", show_alert=True)
@@ -85,7 +101,6 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(f"📤 Send your {key} .txt FILES here. You can send multiple files, they will be added to the list. To delete all, use CLEAR.")
         return
 
-    # --- OWNER CLEAR ---
     if data in ["clear_ml", "clear_codm"]:
         if user_id != OWNER_ID:
             return
@@ -117,7 +132,6 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
 
-    # 1. OWNER UPLOAD - APPEND TO LIST, DO NOT REPLACE OLD FILES
     if user_id in waiting_upload and update.message.document:
         key = waiting_upload[user_id]
         stock_files[key].append(update.message.document.file_id)
@@ -125,7 +139,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"✅ SAVED! Now you have {total} file(s) in {key}. Send another one, it will be added.")
         return
 
-    # 2. REDEEM ENTRANCE KEY
     if context.user_data.get("waiting_key") and update.message.text:
         key = update.message.text.strip()
         if key in keys:
